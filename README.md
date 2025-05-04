@@ -5,4 +5,6 @@ Discord Rat (Remote Access Trojan)
 
 # also made a UD compiler only detected by 11 av's UD ON WINDOWS SECURITY SO W
 
+how to use compiler: python Compiler.py Rat.py, if you want a icon: python Compiler.py Rat.py --icon icon.ico
+
 ![image](https://github.com/user-attachments/assets/af230403-f641-4a07-9f0e-f6bf57580f80)
